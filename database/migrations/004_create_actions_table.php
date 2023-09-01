@@ -14,9 +14,9 @@ return new class extends Migration
         Schema::create('actions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('room_id')->constrained();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->nullable();
             $table->enum('action', ['shuffle', 'join', 'leave', 'move', 'pot', 'play', 'pass', 'deal']);
-            $table->integer('bet')->nullable()->unsigned();
+            $table->integer('bet')->nullable();
             $table->integer('card')->nullable()->unsigned();
             $table->timestamp('time')->useCurrent();
         });

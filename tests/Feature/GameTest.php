@@ -17,11 +17,26 @@ class GameTest extends TestCase
         $response->assertStatus(302);
     }
 
-    public function test_first_access(): void 
+    public function test_basic_scenario(): void 
     {
-        $user = User::factory()->create();
-        $response = $this->actingAs($user)->get('/api/games');
+        $first = User::factory()->create();
+        $response = $this->actingAs($first)->get('/api/games');
         $response->assertOk();
         $this->assertTrue($response['message'] == 'Waiting for more players');
+        // dd($response);
+
+        $second = User::factory()->create();
+        $response = $this->actingAs($second)->get('/api/games');
+        $response->assertOk();
+        $this->assertTrue($response['message'] == 'Waiting for '.$first->name);
+        $this->assertTrue($response['deck'] == 48);
+        $this->assertTrue($response['pot'] == 4);
+        $this->assertTrue($response['dealer'] == $second->id);
+        $this->assertTrue($response['current'] == $first->id);
+
+        $response = $this->actingAs($first)->get('/api/games');
+        $response->assertOk();
+        $this->assertTrue($response['message'] == 'It is your turn!');
     }
+
 }

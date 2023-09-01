@@ -8,4 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class Action extends Model
 {
     use HasFactory;
+
+    public static function add($action, $room_id, $data = []) {
+        $model = new self;
+        $model->timestamps = false;
+        $model->room_id = $room_id;
+        $model->action = $action;
+        foreach($data as $key => $value) {
+            $model->$key = $value;
+        }
+        return $model->save();
+    }
 }
