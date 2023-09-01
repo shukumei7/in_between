@@ -26,10 +26,7 @@ class GameController extends Controller
         if($user_id && empty($user = User::find($user_id))) {
             return false;
         }
-        if(empty($latest_leave = Action::where('user_id', $user->id)->where('action', 'leave')->orderBy('time', 'desc')->first())) {
-            return !empty($latest_join = Action::where('user_id', $user->id)->where('action', 'join')->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
-        }
-        return !empty($latest_join = Action::where('user_id', $user->id)->where('action', 'join')->where('time', '>', $latest_leave->time)->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+        return $user->getRoomID();
     }
 
     private function __listAvailableRooms() {
@@ -43,32 +40,30 @@ class GameController extends Controller
         if(empty($room_id = $this->__getUserRoom())) { // shouldn't happen
             return $this->__listAvailableRooms();
         }
-        if(empty($actions = Action::where('room_id', $room_id)->orderBy('time', 'asc')->get()->toArray())) {
-            Room::delete($room_id); // delete empty room, shouldn't happen
-            return $this->__listAvailableRooms();
+        $room = Room::find($room_id);
+        if(!$room->analyze()) {
+            return response()->json(['message' => 'Failed to get room status'], 302);
         }
-        $players = [];
-        foreach($actions as $action) {
-            switch($action['action']) {
-                case 'join':
-                    $players[$action['user_id']] = $action['user_id'];
-                    break;
-                case 'leave':
-                    unset($players[$action['user_id']]);
-                    break;
-            }
+        $status = $room->getStatus();
+        if(count($status['players']) <= 1) $message = 'Waiting for more players';
+        return response()->json(compact('message') + $status, 200);
+    }
+
+    private function __addAction($command, $room_id, $data = []) {
+        $action = new Action;
+        $action->timestamps = false;
+        $action->room_id = $room_id;
+        $action->action = $command;
+        foreach($data as $key => $value) {
+            $action->$key = $value;
         }
-        return array_values($players);
+        return $action->save();
     }
 
     private function __createRoom() {
-        $room = Room::factory()->create();
         $user = Auth::user();
-        $action = new Action;
-        $action->room_id = $room->id;
-        $action->user_id = $user->id;
-        $action->action = 'join';
-        $action->save();
+        $room = Room::factory()->create(['user_id' => $user->id]);
+        $this->__addAction('join', $room->id, ['user_id' => $user->id]);
         return $this->__getRoomStatus();
     }
 }

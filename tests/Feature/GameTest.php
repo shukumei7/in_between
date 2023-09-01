@@ -22,8 +22,6 @@ class GameTest extends TestCase
         $user = User::factory()->create();
         $response = $this->actingAs($user)->get('/api/games');
         $response->assertOk();
-        $this->assertTrue($response['message'] == 'Listing rooms available');
-        $this->assertTrue(isset($response['rooms']));
-        $this->assertTrue(empty($response['rooms']));
+        $this->assertTrue($response['message'] == 'Waiting for more players');
     }
 }

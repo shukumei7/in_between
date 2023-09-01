@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+use App\Models\Action;
+
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
@@ -44,4 +46,14 @@ class User extends Authenticatable
         'password_updated_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    public function getRoomID() {
+        if(empty($this->id)) {
+            return false;
+        }
+        if(empty($latest_leave = Action::where('user_id', $this->id)->where('action', 'leave')->orderBy('time', 'desc')->first())) {
+            return !empty($latest_join = Action::where('user_id', $this->id)->where('action', 'join')->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+        }
+        return !empty($latest_join = Action::where('user_id', $this->id)->where('action', 'join')->where('time', '>', $latest_leave->time)->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+    }
 }

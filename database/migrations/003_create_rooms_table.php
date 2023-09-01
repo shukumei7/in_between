@@ -15,7 +15,10 @@ return new class extends Migration
             $table->id();
             $table->string('uuid')->unique();
             $table->string('name')->unique();
+            $table->foreignId('user_id')->constrained()->nullable();
+            $table->string('passcode')->nullable();
             $table->integer('pot')->default(DEFAULT_POT);
+            $table->integer('max_players')->default(MAX_PLAYERS);
             $table->timestamps();
         });
     }
