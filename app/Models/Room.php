@@ -46,6 +46,10 @@ class Room extends Model
         return !empty($this->passcode);
     }
 
+    public function getDealt() {
+        return $this->__dealt;
+    }
+
     public function getStatus($refresh = false) {
         if($this->__status && !$refresh) {
             return $this->__status;
@@ -92,10 +96,10 @@ class Room extends Model
     }
 
     private function __analyzeStatus() {
-        if(empty($this->id) || empty($actions = Action::where('room_id', $this->id)->get()->toArray())) {
+        if(empty($this->id) || empty($actions = Action::where('room_id', $this->id)->orderBy('id', 'asc')->get()->toArray())) {
             return false;
         }
-        $this->__resetStatus(); // unnecessary
+        $this->__resetStatus();
         $users = [];
         foreach($actions as $event) {
             $this->__analyzeAction($event);
@@ -128,7 +132,7 @@ class Room extends Model
     private function __resetStatus() {
         $this->__resetDeck();
         $this->__players = [];
-        $this->__pot = $this->__dealer = $this->__turn = 0;
+        $this->__previous_time = $this->__pot = $this->__dealer = $this->__turn = 0;
     }
 
     private function __resetDeck() {
@@ -136,15 +140,14 @@ class Room extends Model
     }
 
     private function __analyzeAction($action) {
-        if($action['time'] < $this->__previous_time) {
+        if($action['id'] < $this->__previous_time) {
             dd([
-                'action_time'   => $action['time'],
+                'action_time'   => $action['id'],
                 'previous_time' => $this->__previous_time,
-                'comparison'    => $action['time'] < $this->__previous_time
+                'comparison'    => $action['id'] < $this->__previous_time
             ]);
-
         }
-        $this->__previous_time = $action['time'];
+        $this->__previous_time = $action['id'];
         $user_id = $action['user_id'];
         $bet = $action['bet'];
         $card = $action['card'];
@@ -153,9 +156,6 @@ class Room extends Model
                 return $this->__addPlayer($user_id);
             case 'leave':
                 return $this->__removePlayer($user_id);
-            case 'play':
-                $this->__hands[$user_id] = [];
-                $this->__nextPlayer();
             case 'pot':
                 return $this->__getPot($user_id, $bet);
             case 'deal':
@@ -167,8 +167,8 @@ class Room extends Model
                 return $this->__nextPlayer();
             case 'rotate':
                 return $this->__nextDealer();
-            // case 'play':
-            //    return $this->__play($user_id, $bet, $card);
+            case 'play':
+                return $this->__play($user_id, $bet, $card);
         }
         return false;
     }
@@ -235,19 +235,13 @@ class Room extends Model
         $this->__checkTurn();
     }
 
-    /*
     private function __play($user_id, $bet, $card) {
-        $hands = $this->__hands[$user_id];
-        $min = min($hands);
-        $max = max($hands);
-        if($card > $min && $card < $max) {
-            $this->__pot -= $bet;
-        } else {
-            $this->__pot += $bet;
-        }
+        $this->__getPot($user_id, $bet);
+        $this->__dealt []= $card;
         $this->__discards []= $card;
-        $this->__discards []= $min;
-        $this->__discards []= $max;
+        $this->__discards []= min($this->__hands[$user_id]);
+        $this->__discards []= max($this->__hands[$user_id]);
+        $this->__hands[$user_id] = [];
+        $this->__nextPlayer();
     }
-    */
 }

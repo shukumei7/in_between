@@ -125,30 +125,47 @@ class GameController extends Controller
             return false;
         }
         Action::add('join', $room->id, ['user_id' => $this->__user->id]);
+        $this->__room = $room;
+        session([$this->__getPointUpdateSessionKey() => 0]); // reset session for new rooms and force getting points
         if(count($status['players']) == 1) {
-            return $this->__startGame($room);
+            return $this->__startGame();
         }
         return $this->__getRoomStatus('Joined a room');
     }
 
-    private function __startGame($room) {
+    private function __startGame() {
+        $room = $this->__room;
         $status = $room->analyze(true);
-        foreach($status['players'] as $user_id) {
-            Action::add('pot', $room->id, ['user_id' => $user_id, 'bet' => -1* $room->pot]);
-        }
+        $this->__getPots($status['players']);
         Action::add('shuffle', $room->id);
-        return $this->__startRound($room, $status);
+        return $this->__startRound();
     }
 
-    private function __startRound($room, $status = null) {
-        empty($status) && $status = $room->analyze(true);
-        $count = count($status['players']);
-        $t = $status['dealer'] + 1;
+    private function __getPots($players) {
+        $room = $this->__room;
+        foreach($players as $user_id) {
+            Action::add('pot', $room->id, ['user_id' => $user_id, 'bet' => -1* $room->pot]);
+        }
+        // var_dump('Old time: '.$room->updated_at);
+        sleep(1);
+        $room->updated_at = now(); // force update of points
+        $room->save();
+        $this->__room = $room;
+        // var_dump('New time: '.$this->__room->updated_at);
+    }
+
+    private function __startRound($message  = null) {
+        $room = $this->__room;
+        $status = $room->analyze(true);
+        // var_dump($status['dealer']);
+        $count = count($players = $status['playing']);
+        $t = array_search($status['dealer'], $players) + 1;
+        // var_dump('First Draw: '.$t.' vs '.$count);
         for($x = 0; $x < $count * 2; $x++) {
             if($t >= $count) $t = 0;
-            Action::add('deal', $room->id, ['user_id' => $status['players'][$t++], 'card' => $room->dealCard()]);
+            Action::add('deal', $room->id, ['user_id' => $players[$t++], 'card' => $room->dealCard()]);
         }
-        return $this->__getRoomStatus('Round started!');
+        return $this->__getRoomStatus(($message ? $message.'. ' : '').'New round started!');
     }
 
     private function __getRoomStatus($refresh = false) {
@@ -178,10 +195,19 @@ class GameController extends Controller
     private function __getUserStatus() {
         $user = $this->__user;
         $room = $this->__room;
-        return [
-            'user_id'   => $user->id,
-            'hand'      => $room->getHand($user->id)
-        ];
+        $out = ['hand' => $room->getHand($user->id)];
+        $k = $this->__getPointUpdateSessionKey();
+        $update = empty(session($k)) || session($k) < $room->updated_at;
+        // var_dump('Session '.$k.' = '.session($k).' vs '.$room->updated_at.' = '.$update);
+        if($update) {
+            $out['points'] = $user->getPoints();
+            session([$k => $room->updated_at]);
+        }
+        return $out;
+    }
+
+    private function __getPointUpdateSessionKey() {
+        return SESSION_POINT_UPDATE.'-'.$this->__user->id;
     }
 
     private function __createRoom() {
@@ -218,6 +244,9 @@ class GameController extends Controller
             $bet *= -1; // lose
         }
         Action::add('play', $room->id, compact('user_id', 'bet', 'card'));
+        if($status['pot'] == $bet) { // winning means clearing pot
+            $this->__getPots($status['playing']); // make playing pay
+        }
         $hand []= $card;
         $output = ['message' => 'You '.($bet > 0? 'win' : 'lose').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's')] + ['cards' => $hand, 'points' => $user->getPoints(true)];
         return $this->__checkEndRound($output, $status, true);
@@ -236,5 +265,19 @@ class GameController extends Controller
         if($status['dealer'] != $status['current']) { // not end round
             return response()->json($output + ($refresh ? $this->__room->analyze(true) : $status) + $this->__getUserStatus(), 200);
         }
+        // end of round
+        // check if new players came in
+        if($new_players = array_diff($status['players'], $status['playing'])) {
+            $this->__getPots($new_players);
+        }
+        // check if deck has enough cards for all players
+        if($status['deck'] < count($status['players']) * 3) {
+            Action::add('shuffle', $status['room_id']);
+        }
+        Action::add('rotate', $status['room_id']);
+        if(isset($output['points'])) {
+            session([$this->__getPointUpdateSessionKey() => 0]);
+        }
+        return $this->__startRound($output['message']);
     }
 }
