@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GameController;
+use App\Http\Controllers\RoomController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,3 +27,4 @@ Route::middleware('auth:sanctum')->put('/accounts/{id}', [UserController::class,
 Route::middleware('auth:sanctum')->get('/accounts/{id}', [UserController::class, 'view']);
 Route::middleware('auth:sanctum')->get('/games', [GameController::class, 'status']);
 Route::middleware('auth:sanctum')->post('/games', [GameController::class, 'play']);
+Route::middleware('auth:sanctum')->put('/rooms/{id}', [RoomController::class, 'update']);

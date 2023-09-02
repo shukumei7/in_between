@@ -178,6 +178,16 @@ class UserController extends Controller
     }
 
     public function view($id) {
-        return response()->json(['message' => 'Viewing User details'], 200);
+        $user = User::find($id);
+        return response()->json([
+            'message'           => 'Viewing User details',
+            'name'              => $user->name,
+            'email'             => $user->email,
+            'joined'            => $user->created_at,
+            'verified'          => !empty($user->email_verified_at) ? 'yes' : 'no',
+            'points'            => $user->getPoints(),
+            'points_updated_at' => $user->points_updated_at,
+            'current_room_id'   => $user->getRoomID()
+        ], 200);
     }
 }

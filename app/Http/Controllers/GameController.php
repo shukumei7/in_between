@@ -16,7 +16,7 @@ class GameController extends Controller
     private $__status = [];
 
     public function status() {
-        $this->__clearData();
+        // $this->__clearData();
         if(false === $room = $this->__getUserRoom()) {
             return response()->json(['message' => 'User not logged in'], 401);
         }
@@ -27,7 +27,7 @@ class GameController extends Controller
     }
 
     public function play(Request $request) {
-        $this->__clearData();
+        // $this->__clearData();
         if(!empty($request->room_id)) {
             return $this->__joinSpecificRoom($request);
         }
@@ -55,9 +55,11 @@ class GameController extends Controller
         return response()->json(['message' => 'You made an invalid action'] + $status + $this->__getUserStatus(), 302);
     }
 
+    /*
     private function __clearData() {
         $this->__room = $this->__user = $this->__status = null;
     }
+    */
 
     private function __listRooms() {
         $rooms = Room::select('name')->orderBy('created_at', 'asc')->get()->toArray();
@@ -126,7 +128,7 @@ class GameController extends Controller
         }
         Action::add('join', $room->id, ['user_id' => $this->__user->id]);
         $this->__room = $room;
-        session([$this->__getPointUpdateSessionKey() => 0]); // reset session for new rooms and force getting points
+        $this->__user->points_updated_at = 0;
         if(count($status['players']) == 1) {
             return $this->__startGame();
         }
@@ -196,19 +198,21 @@ class GameController extends Controller
         $user = $this->__user;
         $room = $this->__room;
         $out = ['hand' => $room->getHand($user->id)];
-        $k = $this->__getPointUpdateSessionKey();
-        $update = empty(session($k)) || session($k) < $room->updated_at;
-        // var_dump('Session '.$k.' = '.session($k).' vs '.$room->updated_at.' = '.$update);
+        $update = empty($user->points_updated_at) || $user->points_updated_at < $room->updated_at;
         if($update) {
             $out['points'] = $user->getPoints();
-            session([$k => $room->updated_at]);
+            $user->points_updated_at = now();
+            $user->save();
+            $this->__user = $user;
         }
         return $out;
     }
 
+    /*
     private function __getPointUpdateSessionKey() {
-        return SESSION_POINT_UPDATE.'-'.$this->__user->id;
+        return SESSION_POINT_UPDATE; // .'-'.$this->__user->id;
     }
+    */
 
     private function __createRoom() {
         $user = $this->__user ?: Auth::user();
@@ -276,7 +280,7 @@ class GameController extends Controller
         }
         Action::add('rotate', $status['room_id']);
         if(isset($output['points'])) {
-            session([$this->__getPointUpdateSessionKey() => 0]);
+            $this->__user->points_updated_at = 0; // get points again at end
         }
         return $this->__startRound($output['message']);
     }
