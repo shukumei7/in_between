@@ -11,5 +11,5 @@ use App\Models\Action;
 
 class RoomTest extends TestCase
 {
-        
+
 }

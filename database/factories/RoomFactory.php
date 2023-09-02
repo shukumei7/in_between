@@ -18,7 +18,6 @@ class RoomFactory extends Factory
     public function definition(): array
     {
         return [
-            'uuid'  => Str::orderedUuid(),
             'name'  => 'Room '.ucwords(fake()->word)
         ];
     }

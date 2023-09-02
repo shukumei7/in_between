@@ -29,7 +29,7 @@ class Room extends Model
             return $this->__status;
         }
         if($this->__analyzeStatus()) {
-            return $this->getStatus();
+            return $this->getStatus($refresh);
         }
         return false;
     }
@@ -46,9 +46,12 @@ class Room extends Model
         return !empty($this->passcode);
     }
 
-    public function getStatus() {
+    public function getStatus($refresh = false) {
+        if($this->__status && !$refresh) {
+            return $this->__status;
+        }
         return $this->__status = [
-            'uuid'      => $this->uuid,
+            'room_id'   => $this->id,
             'name'      => $this->name,
             'deck'      => 52 - count($this->__dealt),
             'discards'  => $this->__discards,
@@ -58,15 +61,25 @@ class Room extends Model
             'dealer'    => $this->__players[$this->__dealer],
             'current'   => $this->__players[$this->__turn],
             'history'   => $this->__history
-        ] + [   // debug
+        ];
+        /* + [   // debug
             'hands' => $this->__hands,
             'dealt' => $this->__dealt
-        ];
+        ];*/
     }
 
-    public function getHands($user_id) {
+    public function getHand($user_id) {
         return empty($this->__hands[$user_id]) ? [] : $this->__hands[$user_id];
     }
+
+    /*
+    public function playHand($user_id) {
+        $dealt = Action::select('card')->where('room_id', $room->id)->where('user_id', $user_id)->where('action', 'deal')->orderBy('time', 'desc')->get()->toArray();
+        dd($dealt);
+        $card = $this->dealCard();
+        return $card > min($dealt) && $card < max($dealt);
+    }
+    */
 
     public function dealCard() {
         do {
@@ -74,7 +87,7 @@ class Room extends Model
             $suit = rand(1, 4);
             $card = $num.$suit;
         } while(in_array($card, $this->__dealt));
-        $this->__dealt []= $card;
+        $this->__dealt []= $card = intval($card);
         return $card;
     }
 
@@ -102,13 +115,13 @@ class Room extends Model
             case 'shuffle':
                 return $this->__history []= ['message' => 'Deck is shuffled', 'time' => $time];
             case 'pot':
-                return $this->__history []= ['message' => $name.' added '.number_format(abs($bet)).' to the pot', 'time' => $time];
+                return $this->__history []= ['message' => $name.' added '.number_format($b = abs($bet)).' point'.($b == 1 ? '' : 's').' to the pot', 'time' => $time];
             case 'deal':
                 return $this->__history []= ['message' => $name.' got a card', 'time' => $time];
             case 'pass':
                 return $this->__history []= ['message' => $name.' passed', 'time' => $time];
             case 'play':
-                return $this->__history []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)), 'time' => $time];
+                return $this->__history []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's'), 'time' => $time];
         }
     }
 
@@ -124,7 +137,12 @@ class Room extends Model
 
     private function __analyzeAction($action) {
         if($action['time'] < $this->__previous_time) {
-            throw new Exception('Invalid action order');
+            dd([
+                'action_time'   => $action['time'],
+                'previous_time' => $this->__previous_time,
+                'comparison'    => $action['time'] < $this->__previous_time
+            ]);
+
         }
         $this->__previous_time = $action['time'];
         $user_id = $action['user_id'];
@@ -135,6 +153,9 @@ class Room extends Model
                 return $this->__addPlayer($user_id);
             case 'leave':
                 return $this->__removePlayer($user_id);
+            case 'play':
+                $this->__hands[$user_id] = [];
+                $this->__nextPlayer();
             case 'pot':
                 return $this->__getPot($user_id, $bet);
             case 'deal':
@@ -142,9 +163,12 @@ class Room extends Model
             case 'shuffle':
                 return $this->__shuffleDeck();
             case 'pass':
+                $this->__hands[$user_id] = [];
                 return $this->__nextPlayer();
-            case 'play':
-                return $this->__play($user_id, $bet, $card);
+            case 'rotate':
+                return $this->__nextDealer();
+            // case 'play':
+            //    return $this->__play($user_id, $bet, $card);
         }
         return false;
     }
@@ -185,8 +209,16 @@ class Room extends Model
 
     private function __shuffleDeck() {
         $this->__resetDeck();
+        $this->__resetTurn();
+    }
+
+    private function __nextDealer() {
         $this->__dealer++;
         $this->__checkDealer();
+        $this->__resetTurn();
+    }
+
+    private function __resetTurn() {
         $this->__turn = $this->__dealer + 1;
         $this->__checkTurn();
     }
@@ -203,6 +235,7 @@ class Room extends Model
         $this->__checkTurn();
     }
 
+    /*
     private function __play($user_id, $bet, $card) {
         $hands = $this->__hands[$user_id];
         $min = min($hands);
@@ -216,4 +249,5 @@ class Room extends Model
         $this->__discards []= $min;
         $this->__discards []= $max;
     }
+    */
 }

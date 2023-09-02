@@ -17,6 +17,7 @@ class Action extends Model
         foreach($data as $key => $value) {
             $model->$key = $value;
         }
-        return $model->save();
+        $model->save();
+        return $model;
     }
 }

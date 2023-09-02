@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('rooms', function (Blueprint $table) {
             $table->id();
-            $table->string('uuid')->unique();
             $table->string('name')->unique();
             $table->foreignId('user_id')->constrained();
             $table->string('passcode')->nullable();
