@@ -18,7 +18,7 @@ class RoomFactory extends Factory
     public function definition(): array
     {
         return [
-            'name'  => 'Room '.ucwords(fake()->word)
+            'name'  => ucwords(fake()->unique()->word)
         ];
     }
 }

@@ -49,6 +49,21 @@ class User extends Authenticatable
 
     private $__room_id = null;
     private $__points = null;
+    private $__bot_scheme = 'none';
+    private $__bot_schemes = [
+        'risky'     => [.3,.5,.7],
+        'balance'   => [.5,.7,.9],
+        'safe'      => [.7,.8,.9],
+    ];
+
+    public function activateBot() {
+        $schemes = array_keys($this->__bot_schemes);
+        $this->__bot_scheme = $schemes[rand(0, count($schemes) - 1)];
+    }
+
+    public function getBotScheme() {
+        return $this->__bot_scheme;
+    }
 
     public function getRoomID() {
         if($this->__room_id != null) {
@@ -71,6 +86,35 @@ class User extends Authenticatable
             return false;
         }
         return $this->__points = array_sum(array_map(function($a) { return $a['bet']; }, Action::select('bet')->where('user_id', $this->id)->get()->toArray()));
+    }
+
+    public function decideMove($status) {
+        if(empty($hand = $status['hand']) || !isset($this->__bot_schemes[$this->__bot_scheme])) {
+            return false;
+        }
+        $min = min($hand);
+        $max = max($hand);
+        $win = $max - $min - (floor($max/10) - floor($min/10)) * 6; // get cards to draw inside
+        $deck = $status['deck'];
+        $discards = $status['discards'];
+        foreach($discards as $discard) {
+            if($discard > $min && $discard < $max) {
+                $win--; // 1 less card to draw
+            }
+        }
+        $chance = $win / $deck;
+        $scheme = $this->__bot_schemes[$this->__bot_scheme];
+        if($chance < $scheme[0]) {
+            return ['action' => 'pass'];
+        }
+        if($chance < $scheme[1]) {
+            return ['action' => 'play', 'bet' => min($status['pot'], RESTRICT_BET)];
+        }
+        $points = !empty($status['points']) && $status['user_id'] == $this->id? $status['points'] : $this->getPoints();
+        if($chance < $scheme[2]) {
+            return ['action' => 'play', 'bet' => min($status['pot'], max($points / 2, $points - RESTRICT_BET, RESTRICT_BET))];
+        }
+        return ['action' => 'play', 'bet' => min($status['pot'] - ($status['pot'] > 1 ? 1 : 0), max($points, RESTRICT_BET))];
     }
 
 }

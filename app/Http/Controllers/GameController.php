@@ -16,7 +16,7 @@ class GameController extends Controller
     private $__status = [];
 
     public function status() {
-        // $this->__clearData();
+        $this->__clearData();
         if(false === $room = $this->__getUserRoom()) {
             return response()->json(['message' => 'User not logged in'], 401);
         }
@@ -27,7 +27,7 @@ class GameController extends Controller
     }
 
     public function play(Request $request) {
-        // $this->__clearData();
+        $this->__clearData();
         if(!empty($request->room_id)) {
             return $this->__joinSpecificRoom($request);
         }
@@ -40,11 +40,14 @@ class GameController extends Controller
         if(count($status['players']) < 2) {
             return response()->json(['message' => 'Waiting for more players'] + $status + $this->__getUserStatus(), 302);
         }
-        if($status['current'] != $user->id) {
-            return response()->json(['message' => 'It is not your turn'] + $status + $this->__getUserStatus(), 200);
-        }
         if(empty($request->action)) {
             return response()->json(['message' => 'An action is required'] + $status + $this->__getUserStatus(), 302);
+        }
+        if($request->action == 'leave') {
+            return $this->__leaveRoom();
+        }
+        if($status['current'] != $user->id) {
+            return response()->json(['message' => 'It is not your turn'] + $status + $this->__getUserStatus(), 200);
         }
         switch($request->action) {
             case 'play':
@@ -55,11 +58,14 @@ class GameController extends Controller
         return response()->json(['message' => 'You made an invalid action'] + $status + $this->__getUserStatus(), 302);
     }
 
-    /*
+    private function __leaveRoom() {
+        Action::add('leave', $this->__room->id, ['user_id' => $this->__user->id]);
+        return response()->json(['message' => 'You left the room'], 200);
+    }
+
     private function __clearData() {
         $this->__room = $this->__user = $this->__status = null;
     }
-    */
 
     private function __listRooms() {
         $rooms = Room::select('name')->orderBy('created_at', 'asc')->get()->toArray();
@@ -83,6 +89,7 @@ class GameController extends Controller
         if(empty($user = Auth::user())) {
             return false;
         }
+        // var_dump('Load User '.$user->id);
         $this->__user = $user;
         if(0 == $room_id = $user->getRoomID()) {
             return 0;
@@ -197,7 +204,10 @@ class GameController extends Controller
     private function __getUserStatus() {
         $user = $this->__user;
         $room = $this->__room;
-        $out = ['hand' => $room->getHand($user->id)];
+        $out = [
+            'user_id'   => $user->id,
+            'hand'      => $room->getHand($user->id)
+        ];
         $update = empty($user->points_updated_at) || $user->points_updated_at < $room->updated_at;
         if($update) {
             $out['points'] = $user->getPoints();
@@ -236,7 +246,7 @@ class GameController extends Controller
         }
         $points = 0;
         $user = $this->__user;
-        if($room->pot > 0 && ($points = $user->getPoints()) > 0 && $bet > $points) {
+        if($room->pot > 0 && ($points = $user->getPoints()) > RESTRICT_BET && $bet > $points) {
             return response()->json(['message' => 'You cannot bet more than your points of '.number_format($points), 'points' => $points], 302);
         }
         if($room->pot > 0 && $points < 1 && $bet > RESTRICT_BET) {
@@ -262,7 +272,7 @@ class GameController extends Controller
         }
         Action::add('pass', $this->__room->id, [ 'user_id' => $this->__user->id]);
         $output = ['message' => 'You passed'];
-        return $this->__checkEndRound($output, $room->analyze());
+        return $this->__checkEndRound($output, $this->__room->analyze(), true);
     }
 
     private function __checkEndRound($output, $status, $refresh = false) {

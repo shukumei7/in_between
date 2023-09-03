@@ -22,7 +22,7 @@ class Room extends Model
     private $__dealer = 0;
     private $__turn = 0;
     private $__previous_time = 0;
-    private $__history = [];
+    private $__activities = [];
 
     public function analyze($refresh = false) {
         if($this->__status && !$refresh) {
@@ -50,30 +50,41 @@ class Room extends Model
         return $this->__dealt;
     }
 
+    private function __getPlaying() {
+        return array_values(array_intersect($this->__players, array_keys($this->__pots)));
+    }
+
     public function getStatus($refresh = false) {
         if($this->__status && !$refresh) {
             return $this->__status;
         }
-        return $this->__status = [
+        $this->__status = [
+            'activities'   => $this->__activities,
             'room_id'   => $this->id,
             'name'      => $this->name,
             'deck'      => 52 - count($this->__dealt),
             'discards'  => $this->__discards,
             'pot'       => $this->__pot,
             'players'   => $this->__players,
-            'playing'   => array_keys($this->__pots),
-            'dealer'    => $this->__players[$this->__dealer],
-            'current'   => $this->__players[$this->__turn],
-            'history'   => $this->__history
+            'playing'   => $playing = $this->__getPlaying(),
+            'dealer'    => !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
+            'current'   => !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
         ];
-        /* + [   // debug
-            'hands' => $this->__hands,
-            'dealt' => $this->__dealt
-        ];*/
+        if(env('APP_ENV') == 'testing') {
+            $this->__status += [   // debug
+                'hands'     => $this->__hands,
+                'dealt'     => $this->__dealt
+            ];
+        }
+        return $this->__status;
     }
 
     public function getHand($user_id) {
         return empty($this->__hands[$user_id]) ? [] : $this->__hands[$user_id];
+    }
+
+    public function getRemainingHands() {
+        return array_filter($this->__hands);
     }
 
     /*
@@ -111,27 +122,28 @@ class Room extends Model
     private function __formatEvent($event) {
         extract($event);
         $name = $user_id ? (isset($users[$user_id]) ? $users[$user_id] : $users[$user_id] = User::find($user_id)->name) : '';
+        $name .= ' ('.$user_id.')';
         switch($action) {
             case 'join':
-                return $this->__history []= ['message' => $name.' joined the room', 'time' => $time];
+                return $this->__activities []= ['message' => $name.' joined the room', 'time' => $time];
             case 'leave':
-                return $this->__history []= ['message' => $name.' left the room', 'time' => $time];
+                return $this->__activities []= ['message' => $name.' left the room', 'time' => $time];
             case 'shuffle':
-                return $this->__history []= ['message' => 'Deck is shuffled', 'time' => $time];
+                return $this->__activities []= ['message' => 'Deck is shuffled', 'time' => $time];
             case 'pot':
-                return $this->__history []= ['message' => $name.' added '.number_format($b = abs($bet)).' point'.($b == 1 ? '' : 's').' to the pot', 'time' => $time];
+                return $this->__activities []= ['message' => $name.' added '.number_format($b = abs($bet)).' point'.($b == 1 ? '' : 's').' to the pot', 'time' => $time];
             case 'deal':
-                return $this->__history []= ['message' => $name.' got a card', 'time' => $time];
+                return $this->__activities []= ['message' => $name.' got a card', 'time' => $time];
             case 'pass':
-                return $this->__history []= ['message' => $name.' passed', 'time' => $time];
+                return $this->__activities []= ['message' => $name.' passed', 'time' => $time];
             case 'play':
-                return $this->__history []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's'), 'time' => $time];
+                return $this->__activities []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's'), 'time' => $time];
         }
     }
 
     private function __resetStatus() {
         $this->__resetDeck();
-        $this->__players = [];
+        $this->__status = $this->__activities = $this->__pots = $this->__players = [];
         $this->__previous_time = $this->__pot = $this->__dealer = $this->__turn = 0;
     }
 
@@ -174,8 +186,8 @@ class Room extends Model
     }
 
     private function __addPlayer($user_id) { // TODO: improve logic
-        if($this->__turn > 0) {
-            $this->__players = array_splice($this->__players, $this->__turn - 1, 1, [$user_id]);
+        if($this->__dealer < count($this->__getPlaying()) - 1) {
+            array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
         }
         $this->__players []= $user_id;
@@ -183,9 +195,27 @@ class Room extends Model
 
     private function __removePlayer($user_id) { // TODO: consider shifting dealer and turn
         unset($this->__players[$index = array_search($user_id, $this->__players)]);
+        $this->__players = array_values($this->__players);
+        if(!isset($this->__pots[$user_id])) {
+            return; // left before playing
+        }
         unset($this->__pots[$user_id]);
         unset($this->__hands[$user_id]);
-        $this->__players = array_values($this->__players);
+        $playing = $this->__getPlaying();
+        if($this->__turn >= count($playing)) {
+            $this->__checkTurn();
+        } else if($this->__turn == $this->__dealer) {
+            
+        }
+        $test_index = $this->__turn - 1;
+        if($test_index < 0) {
+            $text_index = count($playing) - 1;
+        }
+        if(empty($this->__hands[$playing[$test_index]])) {
+            return; // don't push back if previous player is done
+        }
+        $this->__turn--;
+        $this->__dealer--;
         $this->__checkDealer();
         $this->__checkTurn();
     }
@@ -196,13 +226,19 @@ class Room extends Model
     }
 
     private function __checkDealer() {
-        if($this->__dealer >= count($this->__players)) {
+        if($this->__dealer < 0) {
+            $this->__dealer = count($this->__getPlaying()) - 1;
+        }
+        if($this->__dealer >= count($this->__getPlaying())) {
             $this->__dealer = 0;
         }
     }
 
     private function __checkTurn() {
-        if($this->__turn >= count($this->__players)) {
+        if($this->__turn < 0) {
+            $this->__turn = count($this->__getPlaying()) - 1;
+        }
+        if($this->__turn >= count($this->__getPlaying())) {
             $this->__turn = 0;
         }
     }
@@ -236,7 +272,7 @@ class Room extends Model
     }
 
     private function __play($user_id, $bet, $card) {
-        $this->__getPot($user_id, $bet);
+        $this->__pot -= $bet;
         $this->__dealt []= $card;
         $this->__discards []= $card;
         $this->__discards []= min($this->__hands[$user_id]);
