@@ -26,25 +26,41 @@ class GameController extends Controller
         return $this->__getRoomStatus();
     }
 
+    public function spectate($id) {
+        if(empty($room = Room::find($id))) {
+            return response()->json(['message' => 'Room ID not found'], 302);
+        }
+        if(empty($status = $room->analyze())) {
+            return response()->json(['message' => 'Cannot get Room info'], 302);
+        }
+        $message  = '';
+        if(count($status['players']) < 2) {
+            $message = 'Waiting for more players';
+        } else if(!empty($status['current'])) {
+            $message = 'Waiting for '.User::find($status['current'])->name;
+        }
+        return response()->json(['message' => 'You are spectating. '.$message] + $status, 200);
+    }
+
     public function play(Request $request) {
         $this->__clearData();
-        if(!empty($request->room_id)) {
-            return $this->__joinSpecificRoom($request);
-        }
-        if(true !== $return = $this->__checkUserRoom()) {
+        if(true !== $return = $this->__checkUserRoom($request)) {
             return $return;
         }
         $user = $this->__user;
         $room = $this->__room;
         $this->__status = $status = $room->analyze();
-        if(count($status['players']) < 2) {
-            return response()->json(['message' => 'Waiting for more players'] + $status + $this->__getUserStatus(), 302);
-        }
         if(empty($request->action)) {
             return response()->json(['message' => 'An action is required'] + $status + $this->__getUserStatus(), 302);
         }
         if($request->action == 'leave') {
             return $this->__leaveRoom();
+        }
+        if($request->action == 'create') {
+            return $this->__returnAlreadyInRoom();
+        }
+        if(count($status['players']) < 2) {
+            return response()->json(['message' => 'Waiting for more players'] + $status + $this->__getUserStatus(), 302);
         }
         if($status['current'] != $user->id) {
             return response()->json(['message' => 'It is not your turn'] + $status + $this->__getUserStatus(), 200);
@@ -58,9 +74,21 @@ class GameController extends Controller
         return response()->json(['message' => 'You made an invalid action'] + $status + $this->__getUserStatus(), 302);
     }
 
-    private function __leaveRoom() {
-        Action::add('leave', $this->__room->id, ['user_id' => $this->__user->id]);
-        return response()->json(['message' => 'You left the room'], 200);
+    public function join($id) {
+        if(empty($user = Auth::user())) {
+            return response()->json(['message' => 'User not logged in'], 401);
+        }
+        if($user->getRoomID()) {
+            return $this->__returnAlreadyInRoom();
+        }
+        if(empty($id) || empty($room = Room::find($id))) {
+            return response()->json(['message' => 'Room ID not found'], 302);
+        }
+        return $this->__joinRoom($room, !empty($request->passcode) ? $request->passcode : null);
+    }
+
+    private function __returnAlreadyInRoom() {
+        return response()->json(['message' => 'You are already in a room'], 302);
     }
 
     private function __clearData() {
@@ -72,7 +100,7 @@ class GameController extends Controller
         return response()->json(['message' => 'Listing all rooms', 'rooms' => $rooms], 200);
     }
 
-    private function __checkUserRoom() {
+    private function __checkUserRoom($request = null) {
         if($this->__room) {
             return true;
         }
@@ -80,9 +108,28 @@ class GameController extends Controller
             return response()->json(['message' => 'User not logged in'], 302);
         }
         if(is_numeric($room) && $room == 0) {
-            return $this->__joinRandomRoom();
+            return $this->__processJoining($request);
         }
         return true;
+    }
+
+    private function __processJoining($request) {
+        if(empty($request->action) || $request->action != 'create') {
+            return $this->__joinRandomRoom();
+        }
+        $user = $this->__user ?: Auth::user();
+        $settings = ['name' => $user->name."'s room"];
+        $keywords = ['name', 'passcode', 'max_players', 'pot'];
+        foreach($keywords as $keyword) {
+            !empty($request->$keyword) && $this->__addRoomSetting($settings, $keyword, $request->$keyword);
+        }
+        return $this->__createRoom($settings);
+    }
+
+    private function __addRoomSetting(&$settings, $setting, $value) {
+        if($setting == 'pot' && (!is_numeric($value) || $value < RESTRICT_BET)) return;
+        if($setting == 'max_players' && (!is_numeric($value) || $value < 2 || $value > MAX_PLAYERS)) return;
+        $settings[$setting] = $value;
     }
 
     private function __getUserRoom() {
@@ -102,22 +149,13 @@ class GameController extends Controller
         if($rooms->isEmpty()) {
             return $this->__createRoom();
         }
+        $user = $this->__user ?: Auth::user();
         foreach($rooms as $room) {
-            if($return = $this->__joinRoom($room)) {
+            if(($return = $this->__joinRoom($room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && isset($user->id, $status['players'])) {
                 return $return;
             }
         }
         return $this->__createRoom();
-    }
-
-    private function __joinSpecificRoom($request) {
-        if(empty($user = Auth::user())) {
-            return response()->json(['message' => 'User not logged in'], 401);
-        }
-        if($room_id = $user->getRoomID()) {
-            return response()->json(['message' => 'You are already in a room'], 302);
-        }
-        return $this->__joinRoom(Room::find($room_id), !empty($request->passcode) ? $request->passcode : null);
     }
 
     private function __joinRoom($room, $passcode = null) {
@@ -126,28 +164,27 @@ class GameController extends Controller
         }
         $status = $room->analyze();
         if($room->isFull()) {
-            dd('Full: '.number_format($room->max_players).' : '.count($status['players']));
-            return false;
+            return response()->json(['message' => 'Room is full!'], 302);
         }
         if($room->isLocked() && $passcode != $room->passcode) {
-            dd('Locked: '.$room->passcode);
-            return false;
+            return response()->json(['message' => 'You need a proper passcode to enter'], 302);
         }
         Action::add('join', $room->id, ['user_id' => $this->__user->id]);
         $this->__room = $room;
         $this->__user->points_updated_at = 0;
+        $message = 'You joined Room '.$status['name'].' ('.$status['room_id'].')';
         if(count($status['players']) == 1) {
-            return $this->__startGame();
+            return $this->__startGame($message);
         }
-        return $this->__getRoomStatus('Joined a room');
+        return $this->__getRoomStatus($message);
     }
 
-    private function __startGame() {
+    private function __startGame($message = null) {
         $room = $this->__room;
         $status = $room->analyze(true);
         $this->__getPots($status['players']);
         Action::add('shuffle', $room->id);
-        return $this->__startRound();
+        return $this->__startRound($message);
     }
 
     private function __getPots($players) {
@@ -218,17 +255,17 @@ class GameController extends Controller
         return $out;
     }
 
-    /*
-    private function __getPointUpdateSessionKey() {
-        return SESSION_POINT_UPDATE; // .'-'.$this->__user->id;
-    }
-    */
-
-    private function __createRoom() {
+    private function __createRoom($settings = []) {
         $user = $this->__user ?: Auth::user();
-        $this->__room = $room = Room::factory()->create(['user_id' => $user->id]);
+        $created = !empty($settings);
+        if(!empty($settings['name']) && Room::where('name', $settings['name'])->first()) {
+            return response()->json(['message' => 'That Room name already exists: '.$settings['name']], 302);
+        }
+        $settings += ['user_id' => $user->id, 'name' => ucwords(fake()->unique()->word)];
+        // var_dump($settings);
+        $this->__room = $room = Room::create($settings);
         Action::add('join', $room->id, ['user_id' => $user->id]);
-        return $this->__getRoomStatus('Room created');
+        return $this->__getRoomStatus($created ? 'You created a room' : 'You joined Room '.$room->name.' ('.$room->id.')');
     }
 
     private function __playHand($request) {
@@ -279,6 +316,10 @@ class GameController extends Controller
         if($status['dealer'] != $status['current']) { // not end round
             return response()->json($output + ($refresh ? $this->__room->analyze(true) : $status) + $this->__getUserStatus(), 200);
         }
+        return $this->__cleanupRound($output, $status);
+    }
+
+    private function __cleanupRound($output, $status, $rotate = true) {
         // end of round
         // check if new players came in
         if($new_players = array_diff($status['players'], $status['playing'])) {
@@ -288,10 +329,20 @@ class GameController extends Controller
         if($status['deck'] < count($status['players']) * 3) {
             Action::add('shuffle', $status['room_id']);
         }
-        Action::add('rotate', $status['room_id']);
+        $rotate && Action::add('rotate', $status['room_id']);
         if(isset($output['points'])) {
             $this->__user->points_updated_at = 0; // get points again at end
         }
         return $this->__startRound($output['message']);
+    }
+
+    private function __leaveRoom() {
+        $room = $this->__room;
+        Action::add('leave', $room->id, ['user_id' => $user_id = $this->__user->id]);
+        $status = $room->analyze();
+        if($status['current'] == $status['dealer'] && $status['current'] == $user_id) {
+            $this->__cleanupRound(['message' => ''], $status);
+        }
+        return response()->json(['message' => 'You left the room'], 200);
     }
 }

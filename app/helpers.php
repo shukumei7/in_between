@@ -8,4 +8,8 @@ if(!function_exists('get_time_remaining')) {
         $t > 60 && ($t /= 60) && $l = 'hours';
         return number_format($t).' '.$l;
     }
+
+    function json_to_array($json) {
+        return (array) json_decode($json->content(), true);
+    }
 }

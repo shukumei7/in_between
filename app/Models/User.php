@@ -117,4 +117,8 @@ class User extends Authenticatable
         return ['action' => 'play', 'bet' => min($status['pot'] - ($status['pot'] > 1 ? 1 : 0), max($points, RESTRICT_BET))];
     }
 
+    public function isBot() {
+        return !empty($this->__bot_scheme) && $this->__bot_scheme != 'none';
+    }
+
 }

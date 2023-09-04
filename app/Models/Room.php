@@ -12,10 +12,19 @@ class Room extends Model
 {
     use HasFactory;
 
+    protected $fillable = [
+        'user_id',
+        'name',
+        'passcode',
+        'max_players',
+        'pot'
+    ];
+
     private $__status = [];
     private $__dealt = [];
     private $__discards = [];
     private $__players = [];
+    private $__previous =[];
     private $__hands = [];
     private $__pots = [];
     private $__pot = 0;
@@ -58,6 +67,7 @@ class Room extends Model
         if($this->__status && !$refresh) {
             return $this->__status;
         }
+        $active = count($this->__players) > 1;
         $this->__status = [
             'activities'   => $this->__activities,
             'room_id'   => $this->id,
@@ -67,8 +77,8 @@ class Room extends Model
             'pot'       => $this->__pot,
             'players'   => $this->__players,
             'playing'   => $playing = $this->__getPlaying(),
-            'dealer'    => !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
-            'current'   => !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
+            'dealer'    => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
+            'current'   => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
         ];
         if(env('APP_ENV') == 'testing') {
             $this->__status += [   // debug
@@ -186,6 +196,10 @@ class Room extends Model
     }
 
     private function __addPlayer($user_id) { // TODO: improve logic
+        $this->__previous = [
+            'players'   => $this->__players,
+            'playing'   => $this->__getPlaying()
+        ];
         if($this->__dealer < count($this->__getPlaying()) - 1) {
             array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
@@ -194,30 +208,35 @@ class Room extends Model
     }
 
     private function __removePlayer($user_id) { // TODO: consider shifting dealer and turn
-        unset($this->__players[$index = array_search($user_id, $this->__players)]);
+        $this->__previous = [
+            'players'   => $this->__players,
+            'playing'   => $this->__getPlaying()
+        ];
+        unset($this->__players[$player_index = array_search($user_id, $this->__players)]);
         $this->__players = array_values($this->__players);
         if(!isset($this->__pots[$user_id])) {
             return; // left before playing
         }
-        unset($this->__pots[$user_id]);
-        unset($this->__hands[$user_id]);
-        $playing = $this->__getPlaying();
+        $playing = $this->__getPlaying(); // get before clearing
+        // $is_dealer = $playing[$this->__dealer] == $user_id;
+        $hands = $this->__hands[$user_id]; // get before clearing
+        unset($this->__pots[$user_id]); // clear player data
+        unset($this->__hands[$user_id]); // clear player data
+        if($this->__turn == $this->__dealer) {
+            return; // should be solved by rotating
+        }
         if($this->__turn >= count($playing)) {
             $this->__checkTurn();
-        } else if($this->__turn == $this->__dealer) {
-            
+        } else if(empty($hands)) { // turn is done
+            $this->__turn--;    
+            $this->__checkTurn();
         }
-        $test_index = $this->__turn - 1;
-        if($test_index < 0) {
-            $text_index = count($playing) - 1;
+        if($player_index <= $this->__dealer) {
+            $this->__dealer--;
+            $this->__checkDealer();
+        } else if($this->__dealer >= count($playing)) {
+            $this->__checkDealer();
         }
-        if(empty($this->__hands[$playing[$test_index]])) {
-            return; // don't push back if previous player is done
-        }
-        $this->__turn--;
-        $this->__dealer--;
-        $this->__checkDealer();
-        $this->__checkTurn();
     }
 
     private function __getPot($user_id, $bet) {
