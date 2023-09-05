@@ -49,20 +49,18 @@ class User extends Authenticatable
 
     private $__room_id = null;
     private $__points = null;
-    private $__bot_scheme = 'none';
     private $__bot_schemes = [
         'risky'     => [.3,.5,.7],
         'balance'   => [.5,.7,.9],
         'safe'      => [.7,.8,.9],
     ];
 
-    public function activateBot() {
+    public function activateBot($scheme = null) {
         $schemes = array_keys($this->__bot_schemes);
-        $this->__bot_scheme = $schemes[rand(0, count($schemes) - 1)];
-    }
-
-    public function getBotScheme() {
-        return $this->__bot_scheme;
+        !in_array($scheme, $schemes) && $scheme = null;
+        $this->type = 'bot';
+        $this->remember_token = $scheme ?: $schemes[rand(0, count($schemes) - 1)];
+        $this->save();
     }
 
     public function getRoomID() {
@@ -89,8 +87,11 @@ class User extends Authenticatable
     }
 
     public function decideMove($status) {
-        if(empty($hand = $status['hand']) || !isset($this->__bot_schemes[$this->__bot_scheme])) {
+        if(empty($hand = $status['hand'])) {
             return false;
+        }
+        if(!isset($this->__bot_schemes[$this->remember_token])) {
+            $this->activateBot();
         }
         $min = min($hand);
         $max = max($hand);
@@ -103,7 +104,7 @@ class User extends Authenticatable
             }
         }
         $chance = $win / $deck;
-        $scheme = $this->__bot_schemes[$this->__bot_scheme];
+        $scheme = $this->__bot_schemes[$this->remember_token];
         if($chance < $scheme[0]) {
             return ['action' => 'pass'];
         }
@@ -115,10 +116,6 @@ class User extends Authenticatable
             return ['action' => 'play', 'bet' => min($status['pot'], max($points / 2, $points - RESTRICT_BET, RESTRICT_BET))];
         }
         return ['action' => 'play', 'bet' => min($status['pot'] - ($status['pot'] > 1 ? 1 : 0), max($points, RESTRICT_BET))];
-    }
-
-    public function isBot() {
-        return !empty($this->__bot_scheme) && $this->__bot_scheme != 'none';
     }
 
 }

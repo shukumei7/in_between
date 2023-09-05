@@ -49,11 +49,13 @@ class UserController extends Controller
         return response()->json(['message' => 'New user created!', 'user_id' => $user_id] + ($token ? ['token' => $token] : []), 201);
     }
 
+    private $__active_user_types = ['user', 'admin'];
+
     private function __slowLogin($request) {
         if(empty($request->email)) {
             return response()->json(['message' => 'An email is required'], 401);
         }
-        if(!Auth::attempt(['email' => $request->email, 'password' => $request->password], !empty($request->remember))) {
+        if(!Auth::attempt(['email' => $request->email, 'password' => $request->password, 'type' => $this->__active_user_types], !empty($request->remember))) {
             return response()->json(['message' => 'User not found or invalid password'], 401);
         }
         return $this->__returnLogin();
@@ -63,7 +65,7 @@ class UserController extends Controller
         if(empty($request->token)) {
             return response()->json(['message' => 'Access token is required'], 401);
         }
-        if(empty($user = User::where('id', $request->id)->where('remember_token', $request->token)->whereIn('type', ['user', 'admin'])->first())) {
+        if(empty($user = User::where('id', $request->id)->where('remember_token', $request->token)->whereIn('type', $this->__active_user_types)->first())) {
             return response()->json(['message' => 'User not found or invalid token'], 401);
         }
         Auth::login($user, true);

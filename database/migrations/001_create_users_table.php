@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamp('password_updated_at')->nullable();
             $table->timestamp('points_updated_at')->nullable();
             $table->string('access_token')->nullable();
-            $table->enum('type', ['user', 'admin', 'disabled'])->default('user');
+            $table->enum('type', ['user', 'admin', 'disabled', 'bot'])->default('user');
             $table->rememberToken();
             $table->timestamps();
         });

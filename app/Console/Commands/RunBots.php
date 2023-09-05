@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Models\User;
+use App\Models\Room;
 
 class RunBots extends Command
 {
@@ -18,13 +20,17 @@ class RunBots extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Run Bots to play the Game';
 
     /**
      * Execute the console command.
      */
+
+    private $__bots = [];
+
     public function handle()
     {
-        //
+        $this->__bots = $bots = User::where('type', 'bot')->get();
+        
     }
 }

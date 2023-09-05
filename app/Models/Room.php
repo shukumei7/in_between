@@ -74,6 +74,7 @@ class Room extends Model
             'name'      => $this->name,
             'deck'      => 52 - count($this->__dealt),
             'discards'  => $this->__discards,
+            'hidden'    => count($this->__dealt) - count($this->__discards),
             'pot'       => $this->__pot,
             'players'   => $this->__players,
             'playing'   => $playing = $this->__getPlaying(),

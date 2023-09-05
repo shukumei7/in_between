@@ -442,9 +442,9 @@ class GameTest extends TestCase
             }
         } while($turns++ < 50);
         foreach($users as $user) {
-            var_dump($user->name.' : '.$user->getBotScheme().' : '.$user->getPoints());
+            var_dump($user->name.' : '.$user->remember_token.' : '.$user->getPoints());
         }
-        dd($status['activities']);
+        // dd($status['activities']);
     }
     
 }
