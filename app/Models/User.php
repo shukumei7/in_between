@@ -83,7 +83,7 @@ class User extends Authenticatable
         if(empty($this->id)) {
             return false;
         }
-        return $this->__points = array_sum(array_map(function($a) { return $a['bet']; }, Action::select('bet')->where('user_id', $this->id)->get()->toArray()));
+        return $this->__points = STARTING_MONEY + array_sum(array_map(function($a) { return $a['bet']; }, Action::select('bet')->where('user_id', $this->id)->get()->toArray()));
     }
 
     public function decideMove($status) {

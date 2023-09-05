@@ -71,7 +71,7 @@ class Room extends Model
         $this->__status = [
             'activities'   => $this->__activities,
             'room_id'   => $this->id,
-            'name'      => $this->name,
+            'room_name' => $this->name,
             'deck'      => 52 - count($this->__dealt),
             'discards'  => $this->__discards,
             'hidden'    => count($this->__dealt) - count($this->__discards),
@@ -86,7 +86,11 @@ class Room extends Model
                 'hands'     => $this->__hands,
                 'dealt'     => $this->__dealt
             ];
+            return $this->__status;
         }
+        $this->__status += [   // debug
+            'hands'     => array_map(function($a) { return !empty($a); }, $this->__hands)
+        ];
         return $this->__status;
     }
 

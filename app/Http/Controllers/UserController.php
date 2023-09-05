@@ -31,7 +31,8 @@ class UserController extends Controller
         $user->name = $name;
         $user->remember_token = Str::random(TOKEN_LENGTH);
         $user->save();
-        return $this->__returnNewUser($user->id, $user->remember_token);
+        Auth::login($user, true);
+        return $this->__returnNewUser($user->id, $user->remember_token, $user->createToken('IB')->plainTextToken);
     }
 
     private function __registerNamedGuest($name) {
@@ -42,11 +43,12 @@ class UserController extends Controller
         $user->name = $name;
         $user->remember_token = Str::random(TOKEN_LENGTH);
         $user->save();
-        return $this->__returnNewUser($user->id, $user->remember_token);
+        Auth::login($user);
+        return $this->__returnNewUser($user->id, $user->remember_token, $user->createToken('IB')->plainTextToken);
     }
 
-    private function __returnNewUser($user_id, $token = null) {
-        return response()->json(['message' => 'New user created!', 'user_id' => $user_id] + ($token ? ['token' => $token] : []), 201);
+    private function __returnNewUser($user_id, $token = null, $access = null) {
+        return response()->json(['message' => 'New user created!', 'user_id' => $user_id] + ($token ? ['token' => $token] : []) + ($access ? ['access' => $access] : []), 201);
     }
 
     private $__active_user_types = ['user', 'admin'];
@@ -77,7 +79,9 @@ class UserController extends Controller
         return response()->json([
             'message'   => 'You are logged in',
             'token'     => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
-            'name'      => $user->name
+            'name'      => $user->name,
+            'user_id'   => $user->id,
+            'room_id'   => $user->getRoomID()
         ], 202);
     }
 
