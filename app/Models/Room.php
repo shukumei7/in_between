@@ -88,8 +88,15 @@ class Room extends Model
             ];
             return $this->__status;
         }
+        /*
+        $this->__status['players'] = User::whereIn('id', $this->__status['players'])->pluck('name');
+        $this->__status['playing'] = User::whereIn('id', $this->__status['playing'])->pluck('name');
+        $this->__status['dealer'] = $this->__status['dealer'] && ($user = User::find($this->__status['dealer'])) ? $user->name : 'none';
+        $this->__status['current'] = $this->__status['current'] && ($user = User::find($this->__status['current'])) ? $user->name : 'none';
+        */
         $this->__status += [   // debug
-            'hands'     => array_map(function($a) { return !empty($a); }, $this->__hands)
+            'hands'     => array_map(function($a) { return !empty($a); }, $this->__hands),
+            'names'     => User::whereIn('id', $this->__players)->pluck('name', 'id')
         ];
         return $this->__status;
     }

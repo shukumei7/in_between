@@ -172,7 +172,7 @@ class GameController extends Controller
         Action::add('join', $room->id, ['user_id' => $this->__user->id]);
         $this->__room = $room;
         $this->__user->points_updated_at = 0;
-        $message = 'You joined Room '.$status['name'].' ('.$status['room_id'].')';
+        $message = 'You joined Room '.$status['room_name'].' ('.$status['room_id'].')';
         if(count($status['players']) == 1) {
             return $this->__startGame($message);
         }
@@ -258,8 +258,8 @@ class GameController extends Controller
     private function __createRoom($settings = []) {
         $user = $this->__user ?: Auth::user();
         $created = !empty($settings);
-        if(!empty($settings['name']) && Room::where('name', $settings['name'])->first()) {
-            return response()->json(['message' => 'That Room name already exists: '.$settings['name']], 302);
+        if(!empty($settings['room_name']) && Room::where('name', $settings['room_name'])->first()) {
+            return response()->json(['message' => 'That Room name already exists: '.$settings['room_name']], 302);
         }
         $settings += ['user_id' => $user->id, 'name' => ucwords(fake()->unique()->word)];
         // var_dump($settings);
@@ -343,6 +343,20 @@ class GameController extends Controller
         if($status['current'] == $status['dealer'] && $status['current'] == $user_id) {
             $this->__cleanupRound(['message' => ''], $status);
         }
-        return response()->json(['message' => 'You left the room'], 200);
+        return response()->json([
+            'message'   => 'You left the room', 
+            'room_id'   => 0,
+            'deck'      => 0,
+            'hidden'    => 0,
+            'dealer'    => 0,
+            'current'   => 0,
+            'discards'  => [],
+            'hand'      => [],
+            'hands'     => [],
+            'players'   => [],
+            'playing'   => [],
+            'activities'=> [],
+            'room_name' => 'none'
+        ], 200);
     }
 }

@@ -19,6 +19,8 @@ return new class extends Migration
             $table->integer('bet')->nullable();
             $table->integer('card')->nullable()->unsigned();
             $table->timestamp('time')->useCurrent();
+            $table->index(['room_id', 'action', 'user_id', 'time']);
+            $table->index(['user_id', 'action']);
         });
     }
 

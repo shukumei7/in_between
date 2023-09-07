@@ -19,6 +19,7 @@ return new class extends Migration
             $table->integer('pot')->default(DEFAULT_POT);
             $table->integer('max_players')->default(MAX_PLAYERS);
             $table->timestamps();
+            $table->index('created_at');
         });
     }
 

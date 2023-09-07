@@ -76,6 +76,8 @@ class UserController extends Controller
 
     private function __returnLogin() {
         $user = Auth::user();
+        $user->points_updated_at = null;
+        $user->save();
         return response()->json([
             'message'   => 'You are logged in',
             'token'     => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
