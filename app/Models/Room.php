@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 use App\Models\User;
 use App\Models\Action;
@@ -19,6 +20,16 @@ class Room extends Model
         'max_players',
         'pot'
     ];
+
+    protected $casts = [
+        'created_at'    => 'datetime',
+        'updated_at'    => 'datetime'
+    ];
+
+    public function actions(): HasMany 
+    {
+        return $this->hasMany(Action::class);
+    }
 
     private $__status = [];
     private $__dealt = [];
@@ -70,21 +81,27 @@ class Room extends Model
         $active = count($this->__players) > 1;
         $this->__status = [
             'activities'   => $this->__activities,
-            'room_id'   => $this->id,
-            'room_name' => $this->name,
-            'deck'      => 52 - count($this->__dealt),
-            'discards'  => $this->__discards,
-            'hidden'    => count($this->__dealt) - count($this->__discards),
-            'pot'       => $this->__pot,
-            'players'   => $this->__players,
-            'playing'   => $playing = $this->__getPlaying(),
-            'dealer'    => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
-            'current'   => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
+            'room_id'       => $this->id,
+            'room_name'     => $this->name,
+            'deck'          => 52 - count($this->__dealt),
+            'discards'      => $this->__discards,
+            'hidden'        => count($this->__dealt) - count($this->__discards),
+            'pot'           => $this->__pot,
+            'players'       => array_replace(array_flip($this->__players), User::whereIn('id', $this->__players)->pluck('name', 'id')->toArray()),
+            'playing'       => $playing = $this->__getPlaying(),
+            'dealer'        => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
+            'current'       => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
         ];
         if(env('APP_ENV') == 'testing') {
+            $users = User::whereIn('id', $playing)->get();
+            $points = [];
+            foreach($users as $user) {
+                $points[$user->id] = $user->getPoints();
+            }
             $this->__status += [   // debug
                 'hands'     => $this->__hands,
-                'dealt'     => $this->__dealt
+                'dealt'     => $this->__dealt,
+                'scores'    => $points
             ];
             return $this->__status;
         }
@@ -120,7 +137,7 @@ class Room extends Model
 
     public function dealCard() {
         do {
-            $num = rand(1, 13);
+            $num = rand(2, 14);
             $suit = rand(1, 4);
             $card = $num.$suit;
         } while(in_array($card, $this->__dealt));
@@ -129,7 +146,7 @@ class Room extends Model
     }
 
     private function __analyzeStatus() {
-        if(empty($this->id) || empty($actions = Action::where('room_id', $this->id)->orderBy('id', 'asc')->get()->toArray())) {
+        if(empty($this->id) || empty($actions = $this->actions()->orderBy('id', 'asc')->get()->toArray())) {
             return false;
         }
         $this->__resetStatus();
@@ -142,6 +159,14 @@ class Room extends Model
     }
 
     private function __formatEvent($event) {
+        return $this->__activities []= array_intersect_key($event, [
+            'id'           => null,
+            'action'       => null,
+            'user_id'      => null,
+            'bet'          => null,
+            'time'         => null
+        ]); // return events un-formatted, format front end
+        /*
         extract($event);
         $name = $user_id ? (isset($users[$user_id]) ? $users[$user_id] : $users[$user_id] = User::find($user_id)->name) : '';
         $name .= ' ('.$user_id.')';
@@ -161,6 +186,7 @@ class Room extends Model
             case 'play':
                 return $this->__activities []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's'), 'time' => $time];
         }
+        */
     }
 
     private function __resetStatus() {

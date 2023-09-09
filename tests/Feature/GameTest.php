@@ -66,7 +66,7 @@ class GameTest extends TestCase
         $response = $this->actingAs(User::find(1))->post('/api/games');
         $room_name = Room::find(1)->name;
         $this->__checkResponseMessage($response, 'You joined Room '.$room_name.' (1)');
-        $this->assertTrue($response['points'] == 0);
+        $this->assertTrue($response['points'] == STARTING_MONEY);
     }
 
     public function test_status_update(): void 
@@ -117,14 +117,14 @@ class GameTest extends TestCase
         $this->assertTrue($response['pot'] == 4);
         $this->assertTrue($response['dealer'] == 1);
         $this->assertTrue($response['current'] == 2);
-        $this->assertTrue($response['points'] == -2);
+        $this->assertTrue($response['points'] == STARTING_MONEY - 2);
     }
 
     public function test_checking_status_of_inactive_player(): void
     {
         $response = $this->actingAs(User::find(1))->get('/api/games');
         $this->__checkResponseMessage($response, 'Waiting for '.User::find(2)->name);
-        $this->assertTrue($response['points'] == -2);
+        $this->assertTrue($response['points'] == STARTING_MONEY - 2);
     }
 
     public function test_trying_to_take_action_out_of_turn(): void
@@ -173,9 +173,15 @@ class GameTest extends TestCase
 
     public function test_trying_to_play_with_bet_above_money(): void
     {
-        $response = $this->actingAs(User::find(2))->post('/api/games', ['action' => 'play', 'bet' => 4]);
+        // remove starting money
+        $user = User::find(2);
+        $action = Action::add('pot', $room_id = Room::factory()->create(['user_id' => 2])->id, ['user_id' => 2, 'bet' => -1 * STARTING_MONEY]);
+        $this->assertTrue($user->getPoints() == -2);
+        $response = $this->actingAs($user)->post('/api/games', ['action' => 'play', 'bet' => 4]);
         $this->__checkResponseMessage($response, 'You can only bet a max of '.number_format(RESTRICT_BET).' if your points are less than 1', 302);
         $this->assertTrue($response['points'] == -2);
+        $action->delete();
+        Room::find($room_id)->delete();
     }
 
     public function test_playing_a_win(): void
@@ -186,7 +192,7 @@ class GameTest extends TestCase
         $response = $this->actingAs($user)->post('/api/games', ['action' => 'play', 'bet' => 2]);
         $this->__checkResponseMessage($response, 'You win 2 points');
         $this->assertTrue($response['pot'] == 2);
-        $this->assertTrue($response['points'] == 0);
+        $this->assertTrue($response['points'] == STARTING_MONEY);
         $this->assertTrue(count($response['discards']) == 3);
     }
 
@@ -204,7 +210,7 @@ class GameTest extends TestCase
         $response = $this->actingAs($user)->post('/api/games', ['action' =>  'play', 'bet' => 1]);
         $this->__checkResponseMessage($response, 'You lose 1 point. New round started!');
         $this->assertTrue($response['pot'] == 3);
-        $this->assertTrue($response['points'] == -3);
+        $this->assertTrue($response['points'] == STARTING_MONEY - 3);
         $this->assertTrue(count($response['discards']) == 6);
         $this->assertTrue($response['deck'] == 42);
         $this->assertTrue($response['dealer'] == 2);
@@ -215,7 +221,7 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs($this->__addUser(3))->post('/api/games');
         $response->assertOk();
-        $this->assertTrue($response['players'] == [1,2,3]);
+        $this->assertTrue(array_keys($response['players']) == [1,2,3]);
         $this->assertTrue($response['playing'] == [1,2]);
     }
 
@@ -223,7 +229,7 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs($this->__addUser(4))->post('/api/games');
         $response->assertOk();
-        $this->assertTrue($response['players'] == [1,2,3,4]);
+        $this->assertTrue(array_keys($response['players']) == [1,2,3,4]);
         $this->assertTrue($response['playing'] == [1,2]);
     }
 
@@ -238,7 +244,7 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs($this->__addUser(5))->post('/api/games');
         $response->assertOk();
-        $this->assertTrue($response['players'] == [1,2,3,4,5]);
+        $this->assertTrue(array_keys($response['players']) == [1,2,3,4,5]);
         $this->assertTrue($response['playing'] == [1,2]);
     }
     
@@ -257,22 +263,24 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs($this->__addUser(6))->post('/api/games');
         $response->assertOk();
-        $this->assertTrue($response['players'] == [1,2,6,3,4,5]);
+        $this->assertTrue(array_keys($response['players']) == [1,2,6,3,4,5]);
         $this->assertTrue($response['playing'] == [1,2,3,4,5]);
     }
 
     public function test_finish_pot_midround(): void 
     {
         $user = User::find(4);
-        Action::add('pot', Room::factory()->create(['user_id' => 4])->id, ['user_id' => $user->id, 'bet' => 11]); // give pot money
+        $action = Action::add('pot', $room_id = Room::factory()->create(['user_id' => 4])->id, ['user_id' => $user->id, 'bet' => 11]); // give pot money
         $this->__changeHand($user, 10, 155); // sure win
         $response = $this->actingAs($user)->post('/api/games', ['action' => 'play', 'bet' => 9]);
         $this->__checkResponseMessage($response, 'You win 9 points');
         $this->assertTrue($response['current'] == 5);
         $this->assertTrue($response['pot'] == 10);
         $this->assertTrue($response['deck'] == 31);
-        $this->assertTrue($response['points'] == 16);
+        $this->assertTrue($response['points'] == STARTING_MONEY + 16);
         $this->assertTrue(count($response['discards']) == 9);
+        $action->delete();
+        Room::find($room_id)->delete();
     }
 
     public function test_player_at_the_end_of_list_leaving(): void 
@@ -353,7 +361,7 @@ class GameTest extends TestCase
         $response = $this->actingAs(User::factory()->create())->post('/api/games');
         $room_name = Room::find(1)->name;
         $this->__checkResponseMessage($response, 'You joined Room '.$room_name.' (1)');
-        $this->assertTrue($response['players'] == [7]);
+        $this->assertTrue(array_keys($response['players']) == [7]);
     }
 
     public function test_second_player_reactivates_room_game(): void
@@ -361,7 +369,7 @@ class GameTest extends TestCase
         $response = $this->actingAs(User::factory()->create())->post('/api/games');
         $room_name = Room::find(1)->name;
         $this->__checkResponseMessage($response, 'You joined Room '.$room_name.' (1). New round started!');
-        $this->assertTrue($response['players'] == [7,8]);
+        $this->assertTrue(array_keys($response['players']) == [7,8]);
         $this->assertTrue($response['dealer'] == 7);
         $this->assertTrue($response['current'] == 8);
         $this->assertTrue($response['pot'] == 16);
@@ -372,7 +380,7 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs($user = User::find(1))->post('/api/games', ['action' => 'create', 'passcode' => $pass = 'test']);
         $this->__checkResponseMessage($response, 'You created a room');
-        $room = Room::find(3);
+        $room = Room::find(4);
         // var_dump($room->name);
         $this->assertTrue($room->name == $user->name."'s room");
         $this->assertTrue($room->passcode == $pass);
@@ -388,7 +396,7 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs(User::find(2))->post('/api/games', ['action' => 'create', 'name' => $name = 'Test']);
         $response->assertOk();
-        $room = Room::find(4);
+        $room = Room::find(5);
         $this->assertTrue($room->name == $name);
     }
 

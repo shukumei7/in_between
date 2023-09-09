@@ -9,6 +9,10 @@ class Action extends Model
 {
     use HasFactory;
 
+    protected $casts = [
+        'time'    => 'datetime'
+    ];
+
     public static function add($action, $room_id, $data = []) {
         $model = new self;
         $model->timestamps = false;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
@@ -51,7 +52,7 @@ class GameController extends Controller
         $room = $this->__room;
         $this->__status = $status = $room->analyze();
         if(empty($request->action)) {
-            return response()->json(['message' => 'An action is required'] + $status + $this->__getUserStatus(), 302);
+            return response()->json(['message' => 'An action is required'] + $status + $this->__getUserStatus($status), 302);
         }
         if($request->action == 'leave') {
             return $this->__leaveRoom();
@@ -60,10 +61,10 @@ class GameController extends Controller
             return $this->__returnAlreadyInRoom();
         }
         if(count($status['players']) < 2) {
-            return response()->json(['message' => 'Waiting for more players'] + $status + $this->__getUserStatus(), 302);
+            return response()->json(['message' => 'Waiting for more players'] + $status + $this->__getUserStatus($status), 302);
         }
         if($status['current'] != $user->id) {
-            return response()->json(['message' => 'It is not your turn'] + $status + $this->__getUserStatus(), 200);
+            return response()->json(['message' => 'It is not your turn'] + $status + $this->__getUserStatus($status), 200);
         }
         switch($request->action) {
             case 'play':
@@ -71,7 +72,7 @@ class GameController extends Controller
             case 'pass':
                 return $this->__passHand();
         }
-        return response()->json(['message' => 'You made an invalid action'] + $status + $this->__getUserStatus(), 302);
+        return response()->json(['message' => 'You made an invalid action'] + $status + $this->__getUserStatus($status), 302);
     }
 
     public function join($id) {
@@ -151,7 +152,7 @@ class GameController extends Controller
         }
         $user = $this->__user ?: Auth::user();
         foreach($rooms as $room) {
-            if(($return = $this->__joinRoom($room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && isset($user->id, $status['players'])) {
+            if(($return = $this->__joinRoom($room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && !empty($status['players'][$user->id])) {
                 return $return;
             }
         }
@@ -182,7 +183,7 @@ class GameController extends Controller
     private function __startGame($message = null) {
         $room = $this->__room;
         $status = $room->analyze(true);
-        $this->__getPots($status['players']);
+        $this->__getPots(array_keys($status['players']));
         Action::add('shuffle', $room->id);
         return $this->__startRound($message);
     }
@@ -216,7 +217,7 @@ class GameController extends Controller
 
     private function __getRoomStatus($refresh = false) {
         if($this->__status && !$refresh) {
-            return response()->json($this->__status + $this->__getUserStatus(), 200);
+            return response()->json($this->__status + $this->__getUserStatus($status), 200);
         }
         if(true !== $return = $this->__checkUserRoom()) {
             return $return;
@@ -235,18 +236,17 @@ class GameController extends Controller
         } else if($status['current'] == $user->id) {
             $message = 'It is your turn!';
         }
-        return response()->json(compact('message') + $status + $this->__getUserStatus(), 200);
+        return response()->json(compact('message') + $status + $this->__getUserStatus($status), 200);
     }
 
-    private function __getUserStatus() {
+    private function __getUserStatus($status) {
         $user = $this->__user;
         $room = $this->__room;
         $out = [
             'user_id'   => $user->id,
             'hand'      => $room->getHand($user->id)
         ];
-        $update = empty($user->points_updated_at) || $user->points_updated_at < $room->updated_at;
-        if($update) {
+        if(empty($user->points_updated_at) || $user->points_updated_at < $room->updated_at) {
             $out['points'] = $user->getPoints();
             $user->points_updated_at = now();
             $user->save();
@@ -258,10 +258,10 @@ class GameController extends Controller
     private function __createRoom($settings = []) {
         $user = $this->__user ?: Auth::user();
         $created = !empty($settings);
-        if(!empty($settings['room_name']) && Room::where('name', $settings['room_name'])->first()) {
-            return response()->json(['message' => 'That Room name already exists: '.$settings['room_name']], 302);
+        if(!empty($settings['name']) && Room::where('name', $settings['name'])->first()) {
+            return response()->json(['message' => 'That Room name already exists: '.$settings['name']], 302);
         }
-        $settings += ['user_id' => $user->id, 'name' => ucwords(fake()->unique()->word)];
+        $settings += ['user_id' => $user->id, 'name' => ucwords(fake()->unique()->word).' '.Room::count()];
         // var_dump($settings);
         $this->__room = $room = Room::create($settings);
         Action::add('join', $room->id, ['user_id' => $user->id]);
@@ -314,7 +314,7 @@ class GameController extends Controller
 
     private function __checkEndRound($output, $status, $refresh = false) {
         if($status['dealer'] != $status['current']) { // not end round
-            return response()->json($output + ($refresh ? $this->__room->analyze(true) : $status) + $this->__getUserStatus(), 200);
+            return response()->json($output + ($refresh ? $this->__room->analyze(true) : $status) + $this->__getUserStatus($status), 200);
         }
         return $this->__cleanupRound($output, $status);
     }
@@ -322,7 +322,7 @@ class GameController extends Controller
     private function __cleanupRound($output, $status, $rotate = true) {
         // end of round
         // check if new players came in
-        if($new_players = array_diff($status['players'], $status['playing'])) {
+        if($new_players = array_diff(array_keys($status['players']), $status['playing'])) {
             $this->__getPots($new_players);
         }
         // check if deck has enough cards for all players

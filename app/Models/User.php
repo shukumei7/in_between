@@ -4,6 +4,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -47,6 +49,11 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    public function actions(): HasMany
+    {
+        return  $this->hasMany(Action::class);
+    }
+
     private $__room_id = null;
     private $__points = null;
     private $__bot_schemes = [
@@ -70,10 +77,10 @@ class User extends Authenticatable
         if(empty($this->id)) {
             return false;
         }
-        if(empty($latest_leave = Action::where('user_id', $this->id)->where('action', 'leave')->orderBy('time', 'desc')->first())) {
-            return $this->__room_id = !empty($latest_join = Action::where('user_id', $this->id)->where('action', 'join')->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+        if(empty($latest_leave = $this->actions()->where('action', 'leave')->orderBy('time', 'desc')->first())) {
+            return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
         }
-        return $this->__room_id = !empty($latest_join = Action::where('user_id', $this->id)->where('action', 'join')->where('time', '>', $latest_leave->time)->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+        return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->where('time', '>', $latest_leave->time)->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
     }
 
     public function getPoints($refresh = false) {
@@ -83,7 +90,7 @@ class User extends Authenticatable
         if(empty($this->id)) {
             return false;
         }
-        return $this->__points = STARTING_MONEY + array_sum(array_map(function($a) { return $a['bet']; }, Action::select('bet')->where('user_id', $this->id)->get()->toArray()));
+        return $this->__points = STARTING_MONEY + array_sum($this->actions()->pluck('bet')->toArray());
     }
 
     public function decideMove($status) {
