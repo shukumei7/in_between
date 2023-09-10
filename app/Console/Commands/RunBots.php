@@ -50,6 +50,14 @@ class RunBots extends Command
         if(!$acted && count($this->__bots) < MAX_BOTS) {
             $this->__startNewRoom();
         }
+        foreach($this->__bots as $bot) {
+            if($bot->getPoints() < BOT_DEFEATED && ($room_id = $bot->getRoomID())) {
+                Action::add('leave', $room_id, ['user_id' => $bot->id]);
+                $this->info('Bot '.$bot->id.' is defeated');
+                $bot->type = 'disabled';
+                $bot->save();
+            }
+        }
     }
 
     private function __analyzeRoom($room) {

@@ -14,6 +14,20 @@ class GameController extends Controller
     private $__user = null;
     private $__room = null;
     private $__status = [];
+    private $__blank = [
+        'room_id'   => 0,
+        'deck'      => 0,
+        'hidden'    => 0,
+        'dealer'    => 0,
+        'current'   => 0,
+        'discards'  => [],
+        'hand'      => [],
+        'hands'     => [],
+        'players'   => [],
+        'playing'   => [],
+        'activities'=> [],
+        'room_name' => 'none'
+    ];
 
     public function status() {
         $this->__clearData();
@@ -101,7 +115,7 @@ class GameController extends Controller
 
     private function __listRooms() {
         $rooms = Room::select('name')->orderBy('created_at', 'asc')->get()->toArray();
-        return response()->json(['message' => 'Listing all rooms', 'rooms' => $rooms], 200);
+        return response()->json(['message' => 'Listing all rooms', 'rooms' => $rooms] + $this->__blank, 200);
     }
 
     private function __checkUserRoom($request = null) {
@@ -352,20 +366,6 @@ class GameController extends Controller
         if($status['current'] == $status['dealer'] && $status['current'] == $user_id) {
             $this->__cleanupRound(['message' => ''], $status);
         }
-        return response()->json([
-            'message'   => 'You left the room', 
-            'room_id'   => 0,
-            'deck'      => 0,
-            'hidden'    => 0,
-            'dealer'    => 0,
-            'current'   => 0,
-            'discards'  => [],
-            'hand'      => [],
-            'hands'     => [],
-            'players'   => [],
-            'playing'   => [],
-            'activities'=> [],
-            'room_name' => 'none'
-        ], 200);
+        return response()->json(['message' => 'You left the room'] + $this->__blank, 200);
     }
 }
