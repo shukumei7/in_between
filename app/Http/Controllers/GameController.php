@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
@@ -85,11 +84,15 @@ class GameController extends Controller
         if(empty($id) || empty($room = Room::find($id))) {
             return response()->json(['message' => 'Room ID not found'], 302);
         }
-        return $this->__joinRoom($room, !empty($request->passcode) ? $request->passcode : null);
+        return $this->joinRoom($user, $room, !empty($request->passcode) ? $request->passcode : null);
     }
 
     private function __returnAlreadyInRoom() {
         return response()->json(['message' => 'You are already in a room'], 302);
+    }
+
+    public function clearData() {
+        $this->__room = $this->__user = $this->__status = null;
     }
 
     private function __clearData() {
@@ -152,14 +155,14 @@ class GameController extends Controller
         }
         $user = $this->__user ?: Auth::user();
         foreach($rooms as $room) {
-            if(($return = $this->__joinRoom($room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && !empty($status['players'][$user->id])) {
+            if(($return = $this->joinRoom($user, $room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && !empty($status['players'][$user->id])) {
                 return $return;
             }
         }
         return $this->__createRoom();
     }
 
-    private function __joinRoom($room, $passcode = null) {
+    public function joinRoom($user, $room, $passcode = null) {
         if(empty($room) || empty($room->id)) {
             return response()->json(['message' => 'Invalid room'], 302);
         }
@@ -170,9 +173,9 @@ class GameController extends Controller
         if($room->isLocked() && $passcode != $room->passcode) {
             return response()->json(['message' => 'You need a proper passcode to enter'], 302);
         }
-        Action::add('join', $room->id, ['user_id' => $this->__user->id]);
+        Action::add('join', $room->id, ['user_id' => $user->id]);
         $this->__room = $room;
-        $this->__user->points_updated_at = 0;
+        $user->points_updated_at = 0;
         $message = 'You joined Room '.$status['room_name'].' ('.$status['room_id'].')';
         if(count($status['players']) == 1) {
             return $this->__startGame($message);
@@ -183,13 +186,12 @@ class GameController extends Controller
     private function __startGame($message = null) {
         $room = $this->__room;
         $status = $room->analyze(true);
-        $this->__getPots(array_keys($status['players']));
+        $this->__getPots($room, array_keys($status['players']));
         Action::add('shuffle', $room->id);
-        return $this->__startRound($message);
+        return $this->__startRound($room, $message);
     }
 
-    private function __getPots($players) {
-        $room = $this->__room;
+    private function __getPots($room, $players) {
         foreach($players as $user_id) {
             Action::add('pot', $room->id, ['user_id' => $user_id, 'bet' => -1* $room->pot]);
         }
@@ -201,8 +203,7 @@ class GameController extends Controller
         // var_dump('New time: '.$this->__room->updated_at);
     }
 
-    private function __startRound($message  = null) {
-        $room = $this->__room;
+    private function __startRound($room, $message  = null) {
         $status = $room->analyze(true);
         // var_dump($status['dealer']);
         $count = count($players = $status['playing']);
@@ -240,7 +241,9 @@ class GameController extends Controller
     }
 
     private function __getUserStatus($status) {
-        $user = $this->__user;
+        if(empty($user = $this->__user)) {
+            return [];
+        }
         $room = $this->__room;
         $out = [
             'user_id'   => $user->id,
@@ -289,6 +292,13 @@ class GameController extends Controller
         if($room->pot > 0 && $points < 1 && $bet > RESTRICT_BET) {
             return response()->json(['message' => 'You can only bet a max of '.number_format(RESTRICT_BET).' if your points are less than 1', 'points' => $points], 302);
         }
+        $card = $this->playHand($user, $room, $bet, $status);
+        $hand []= $card;
+        $output = ['message' => 'You '.($bet > 0? 'win' : 'lose').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's')] + ['cards' => $hand, 'points' => $user->getPoints(true)];
+        return $this->checkEndRound($output, $status, true);
+    }
+
+    public function playHand($user, $room, &$bet, $status) {
         $hand = $room->getHand($user_id = $user->id);
         $card = $room->dealCard();
         if(intval($card) < intval(min($hand)) || intval($card) > intval(max($hand))) {
@@ -296,11 +306,9 @@ class GameController extends Controller
         }
         Action::add('play', $room->id, compact('user_id', 'bet', 'card'));
         if($status['pot'] == $bet) { // winning means clearing pot
-            $this->__getPots($status['playing']); // make playing pay
+            $this->__getPots($room, $status['playing']); // make playing pay
         }
-        $hand []= $card;
-        $output = ['message' => 'You '.($bet > 0? 'win' : 'lose').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's')] + ['cards' => $hand, 'points' => $user->getPoints(true)];
-        return $this->__checkEndRound($output, $status, true);
+        return $card;
     }
 
     private function __passHand() {
@@ -309,10 +317,10 @@ class GameController extends Controller
         }
         Action::add('pass', $this->__room->id, [ 'user_id' => $this->__user->id]);
         $output = ['message' => 'You passed'];
-        return $this->__checkEndRound($output, $this->__room->analyze(), true);
+        return $this->checkEndRound($output, $this->__room->analyze(), true);
     }
 
-    private function __checkEndRound($output, $status, $refresh = false) {
+    public function checkEndRound($output, $status, $refresh = false) {
         if($status['dealer'] != $status['current']) { // not end round
             return response()->json($output + ($refresh ? $this->__room->analyze(true) : $status) + $this->__getUserStatus($status), 200);
         }
@@ -322,18 +330,19 @@ class GameController extends Controller
     private function __cleanupRound($output, $status, $rotate = true) {
         // end of round
         // check if new players came in
+        $room = $this->__room ?: Room::find($status['room_id']);
         if($new_players = array_diff(array_keys($status['players']), $status['playing'])) {
-            $this->__getPots($new_players);
+            $this->__getPots($room, $new_players);
         }
         // check if deck has enough cards for all players
-        if($status['deck'] < count($status['players']) * 3) {
+        if($status['deck'] < count($status['players']) * 3 + 1) {
             Action::add('shuffle', $status['room_id']);
         }
         $rotate && Action::add('rotate', $status['room_id']);
         if(isset($output['points'])) {
             $this->__user->points_updated_at = 0; // get points again at end
         }
-        return $this->__startRound($output['message']);
+        return $this->__startRound($room, !empty($output['message']) ? $output['message'] : null);
     }
 
     private function __leaveRoom() {

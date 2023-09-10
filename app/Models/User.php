@@ -67,11 +67,11 @@ class User extends Authenticatable
         !in_array($scheme, $schemes) && $scheme = null;
         $this->type = 'bot';
         $this->remember_token = $scheme ?: $schemes[rand(0, count($schemes) - 1)];
-        $this->save();
+        return $this->save();
     }
 
-    public function getRoomID() {
-        if($this->__room_id != null) {
+    public function getRoomID($refresh = false) {
+        if($this->__room_id != null && !$refresh) {
             return $this->__room_id;
         }
         if(empty($this->id)) {

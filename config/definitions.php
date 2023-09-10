@@ -12,4 +12,5 @@ if(!defined('MIN_PASS_LENGTH')) {
     define('SESSION_POINT_UPDATE', 'point_update');
     define('MAX_BOTS', 100);
     define('BOT_DEFEATED', -10);
+    define('KICK_TIMEOUT', 60);
 }

@@ -166,27 +166,6 @@ class Room extends Model
             'bet'          => null,
             'time'         => null
         ]); // return events un-formatted, format front end
-        /*
-        extract($event);
-        $name = $user_id ? (isset($users[$user_id]) ? $users[$user_id] : $users[$user_id] = User::find($user_id)->name) : '';
-        $name .= ' ('.$user_id.')';
-        switch($action) {
-            case 'join':
-                return $this->__activities []= ['message' => $name.' joined the room', 'time' => $time];
-            case 'leave':
-                return $this->__activities []= ['message' => $name.' left the room', 'time' => $time];
-            case 'shuffle':
-                return $this->__activities []= ['message' => 'Deck is shuffled', 'time' => $time];
-            case 'pot':
-                return $this->__activities []= ['message' => $name.' added '.number_format($b = abs($bet)).' point'.($b == 1 ? '' : 's').' to the pot', 'time' => $time];
-            case 'deal':
-                return $this->__activities []= ['message' => $name.' got a card', 'time' => $time];
-            case 'pass':
-                return $this->__activities []= ['message' => $name.' passed', 'time' => $time];
-            case 'play':
-                return $this->__activities []= ['message' => $name.' '.($bet > 0? 'won' : 'lost').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's'), 'time' => $time];
-        }
-        */
     }
 
     private function __resetStatus() {
@@ -215,6 +194,7 @@ class Room extends Model
             case 'join':
                 return $this->__addPlayer($user_id);
             case 'leave':
+            case 'kick':
                 return $this->__removePlayer($user_id);
             case 'pot':
                 return $this->__getPot($user_id, $bet);

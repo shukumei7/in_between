@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Tests\TestCase;
 use App\Models\User;
@@ -30,11 +29,7 @@ class GameTest extends TestCase
     }
 
     private function __checkResponseMessage($response, $message, $code = 200) {
-        if($response['message'] != $message) {
-            $trace = debug_backtrace()[0]['line'];
-            dd(compact('response', 'message', 'trace'));
-        }
-        $response->assertStatus($code);
+        return $this->_checkResponseMessage($response, $message, $code);
     }
 
     private function __addUser($user_id) {
@@ -45,11 +40,7 @@ class GameTest extends TestCase
 
     public function test_unauthorized_access(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        User::truncate();
-        Room::truncate();
-        Action::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        $this->_resetData();
         $response = $this->get('/api/games');
         $response->assertStatus(302);
     }
