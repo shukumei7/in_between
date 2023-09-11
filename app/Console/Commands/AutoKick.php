@@ -30,23 +30,26 @@ class AutoKick extends Command
 
     public function handle()
     {
-        $latest_times = Action::select('room_id', DB::raw('max(time) AS max_time'))->where('time', '<', date('Y-m-d H:i:s', strtotime('-'.KICK_TIMEOUT.' seconds')))->groupBy('room_id')->pluck('max_time', 'room_id')->toArray();
-        $room_ids = [];
-        $this->info('Stale Rooms: '.number_format(count($latest_times)));
-        foreach($latest_times as $room_id => $time) {
-            $this->__checkKick($room_id);
+        $rooms = Room::get();
+        $this->info('Rooms: '.count($rooms));
+        $now = date('Y-m-d H:i:s');
+        $time = time();
+        $this->info('Time now: '.$now);
+        foreach($rooms as $room) {
+            $latest_time = $room->actions()->whereIn('action', ['join', 'play', 'pass', 'deal'])->orderBy('time', 'desc')->first()->time;
+            $this->info('Room '.$room->id.' latest activity: '.$latest_time);
+            ($time - strtotime($latest_time) >  KICK_TIMEOUT) && $this->__checkKick($room);
         }
     }
 
-    private function __checkKick($room_id) {
-        $room = Room::find($room_id);
+    private function __checkKick($room) {
         $status = $room->analyze();
         if($status['current'] == 0 || count($status['players']) < 2) {
-            $this->info('Room '.$room->name.' is inactive');
+            $this->info('Room '.$room->id.' is inactive');
             return; // room is inactive
         }
-        Action::add('kick', $room_id, ['user_id' => $status['current']]);
-        $this->info('Kick '.User::find($status['current'])->name.' from Room '.$room->name);
+        Action::add('kick', $room->id, ['user_id' => $status['current']]);
+        $this->info('Kick User '.User::find($status['current'])->id.' from Room '.$room->id);
     }
 
 }

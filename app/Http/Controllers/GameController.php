@@ -180,7 +180,7 @@ class GameController extends Controller
         if(empty($room) || empty($room->id)) {
             return response()->json(['message' => 'Invalid room'], 302);
         }
-        $status = $room->analyze();
+        $status = $room->analyze(true);
         if($room->isFull()) {
             return response()->json(['message' => 'Room is full!'], 302);
         }

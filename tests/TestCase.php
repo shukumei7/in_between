@@ -28,4 +28,12 @@ abstract class TestCase extends BaseTestCase
         }
         $response->assertStatus($code);
     }
+
+    public function assertCase($case, $context): void 
+    {
+        if(!$case) {
+            $trace = debug_backtrace()[0]['line'];
+            dd(compact('context', 'trace'));
+        }
+    }
 }

@@ -78,9 +78,9 @@ class User extends Authenticatable
             return false;
         }
         if(empty($latest_leave = $this->actions()->whereIn('action', ['leave', 'kick'])->orderBy('time', 'desc')->first())) {
-            return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+            return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->first())? $latest_join->room_id : 0;
         }
-        return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->where('time', '>', $latest_leave->time)->orderBy('time', 'desc')->first())? $latest_join->room_id : 0;
+        return $this->__room_id = !empty($latest_join = $this->actions()->where('action', 'join')->where('id', '>', $latest_leave->id)->first())? $latest_join->room_id : 0;
     }
 
     public function getPoints($refresh = false) {

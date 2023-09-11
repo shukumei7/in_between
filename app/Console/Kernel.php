@@ -12,8 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('bots:run')->everyThirtySeconds()->withoutOverlapping()->onOneServer()->runInBackground();
-        $schedule->command('game:auto-kick')->everyMinute()->withoutOverlapping()->onOneServer()->runInBackground();
+        $schedule->command('bots:run')->everyFifteenSeconds()->withoutOverlapping()->onOneServer()->runInBackground();
+        // $schedule->command('game:auto-kick')->everyMinute()->withoutOverlapping()->onOneServer()->runInBackground();
     }
 
     /**

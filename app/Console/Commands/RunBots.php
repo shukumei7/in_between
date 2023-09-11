@@ -30,7 +30,6 @@ class RunBots extends Command
      */
 
     private $__bots = [];
-    private $__api = 'http://localhost/api/games';
     private $Game = null;
 
     public function handle()
@@ -45,18 +44,10 @@ class RunBots extends Command
         $this->Game = new GameController;
         $acted = false;
         foreach($rooms as $room) {
-            $acted = $acted || $this->__analyzeRoom($room);
+            $acted = $this->__analyzeRoom($room) || $acted;
         }
         if(!$acted && count($this->__bots) < MAX_BOTS) {
             $this->__startNewRoom();
-        }
-        foreach($this->__bots as $bot) {
-            if($bot->getPoints() < BOT_DEFEATED && ($room_id = $bot->getRoomID())) {
-                Action::add('leave', $room_id, ['user_id' => $bot->id]);
-                $this->info('Bot '.$bot->id.' is defeated');
-                $bot->type = 'disabled';
-                $bot->save();
-            }
         }
     }
 
@@ -64,12 +55,16 @@ class RunBots extends Command
         $this->Game->clearData();
         $status = $room->analyze();
         $acted = false;
-        if(count($status['players']) < MAX_ROOM_BOTS) {
+        $count = count($status['players']);
+        $this->info('Room '.$room->id.': ['.implode(',', array_map(function($a) use ($status) {
+            return $a.(!in_array($a, $status['playing']) ? 'x' : (($status['dealer'] == $a ? 'd' : '').($status['current'] == $a? 'c' : '')));
+        }, array_keys($status['players']))).']');
+        if($count < MAX_ROOM_BOTS) {
             $this->__addBot($room);
             $acted = true;
         } 
         if(!empty($user_id = $status['current']) && ($bot = $this->__getBot($user_id)) && !empty($move = $bot->decideMove($status + ['hand' => $room->getHand($bot->id)]))) {
-            $this->__analyzeMove($bot, $room, $move, $status);            
+            $this->__analyzeMove($bot, $room, $move, $status);
             $status = $this->Game->checkEndRound([], $status);
         }
         return $acted;
@@ -82,20 +77,37 @@ class RunBots extends Command
         switch($move['action']) {
             case 'pass':
                 Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
-                $this->info('Bot '.$bot->id.' passed on Room '.$room->id);
+                $this->info('Bot '.$bot->id.' passed');
                 return;
             case 'play':
-                $bet = $move['bet'];
-                $this->Game->playHand($bot, $room, $bet, $status);
-                $this->info('Bot '.$bot->id.' played on Room '.$room->id.' and '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)));
+                $this->__playMove($bot, $room, $move['bet'], $status);       
                 return;
+        }
+    }
+
+    private function __playMove($bot, $room, $bet, $status) {
+        $this->Game->playHand($bot, $room, $bet, $status);
+        $this->info('Bot '.$bot->id.' played and '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)));
+        $bet < 0 && $this->__kickBot($bot, $room, $status);
+    }
+
+    private function __kickBot($bot, $room, $status) {
+        if(count($status['players']) >= $room->max_players) {
+            $this->info('Bot '.$bot->id.' is giving space');
+            return Action::add('leave', $room->id, ['user_id' => $bot->id]);
+        } 
+        if(BOT_DEFEATED > $bot->getPoints()) {
+            $this->info('Bot '.$bot->id.' is defeated');
+            $bot->type = 'disabled';
+            $bot->save();
+            return Action::add('leave', $room->id, ['user_id' => $bot->id]);
         }
     }
 
     private function __addBot($room) {
         $bot = $this->__getBot();
         $this->Game->joinRoom($bot, $room);
-        $this->info('Added Bot '.$bot->id.' to Room '.$room->id);
+        $this->info('Added Bot '.$bot->id);
     }
 
     private function __getBot($id = null) {
@@ -108,7 +120,7 @@ class RunBots extends Command
             return $this->__createNewBot();
         }
         foreach($this->__bots as $bot) {
-            if(empty($room_id = $bot->getRoomID())) {
+            if(empty($room_id = $bot->getRoomID(true))) {
                 return $bot;
             }
         }
@@ -128,7 +140,7 @@ class RunBots extends Command
         $bot = $this->__getBot();
         $room = Room::factory()->create([
             'user_id'   => $bot->id,
-            'name'      => fake()->unique()->name.' '.Room::count()
+            'name'      => ucwords(fake()->unique()->word).' '.Room::count()
         ]);
         Action::add('join', $room->id, ['user_id' => $bot->id]);
         $this->info('Bot '.$bot->id.' started a room');

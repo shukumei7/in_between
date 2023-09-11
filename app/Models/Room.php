@@ -71,7 +71,7 @@ class Room extends Model
     }
 
     private function __getPlaying() {
-        return array_values(array_intersect($this->__players, array_keys($this->__pots)));
+        return count($this->__players) > 1 ? array_values(array_intersect($this->__players, array_keys($this->__pots))) : [];
     }
 
     public function getStatus($refresh = false) {
@@ -105,16 +105,6 @@ class Room extends Model
             ];
             return $this->__status;
         }
-        /*
-        $this->__status['players'] = User::whereIn('id', $this->__status['players'])->pluck('name');
-        $this->__status['playing'] = User::whereIn('id', $this->__status['playing'])->pluck('name');
-        $this->__status['dealer'] = $this->__status['dealer'] && ($user = User::find($this->__status['dealer'])) ? $user->name : 'none';
-        $this->__status['current'] = $this->__status['current'] && ($user = User::find($this->__status['current'])) ? $user->name : 'none';
-        */
-        $this->__status += [   // debug
-            'hands'     => array_map(function($a) { return !empty($a); }, $this->__hands),
-            'names'     => User::whereIn('id', $this->__players)->pluck('name', 'id')
-        ];
         return $this->__status;
     }
 
@@ -218,7 +208,7 @@ class Room extends Model
             'players'   => $this->__players,
             'playing'   => $this->__getPlaying()
         ];
-        if($this->__dealer < count($this->__getPlaying()) - 1) {
+        if($this->__dealer > 0 && $this->__dealer < count($this->__getPlaying()) - 1) {
             array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
         }
@@ -231,7 +221,7 @@ class Room extends Model
             'playing'   => $this->__getPlaying()
         ];
         unset($this->__players[$player_index = array_search($user_id, $this->__players)]);
-        $this->__players = array_values($this->__players);
+        $players = $this->__players = array_values($this->__players);
         if(!isset($this->__pots[$user_id])) {
             return; // left before playing
         }
