@@ -169,10 +169,11 @@ class GameController extends Controller
             return $this->__createRoom();
         }
         $user = $this->__user ?: Auth::user();
-        foreach($rooms as $room) {
+        while($room = $rooms[$index = rand(0, count($rooms) - 1)]) {
             if(($return = $this->joinRoom($user, $room)) && $return->getStatusCode() == 200 && ($status = json_to_array($return)) && !empty($status['players']) && !empty($status['players'][$user->id])) {
                 return $return;
             }
+            unset($rooms[$index]);
         }
         return $this->__createRoom();
     }
@@ -243,7 +244,7 @@ class GameController extends Controller
         $user = $this->__user;
         if(is_string($refresh)) {
             $message = $refresh;
-        } else if(count($status['players']) <= 1) {
+        } else if(count($status['players']) <= 1 || empty($status['current'])) {
             $message = 'Waiting for more players';
         } else if($status['current'] != $user->id) {
             $message = 'Waiting for '.User::find($status['current'])->name;
@@ -316,7 +317,7 @@ class GameController extends Controller
             return false; // throw new Exception($message);
         }
         $status = $room->analyze();
-        if(!isset($status['hands'][$user_id = $user->id]) || empty($hand = $status['hands'][$user_id = $user->id])) {
+        if(!isset($status['hands'][$user_id = $user->id]) || empty($hand = $status['hands'][$user_id = $user->id]) || !is_array($hand)) {
             dump($status);
             dump($message = 'User has no hand: User ID '.$user_id);
             return false; // throw new Exception($message);
@@ -382,12 +383,12 @@ class GameController extends Controller
         return $this->__startRound($room, !empty($output['message']) ? $output['message'] : null);
     }
 
-    public function leaveRoom($user) {
+    public function leaveRoom($user, $kick = false) {
         if(empty($room = $this->__room ?: Room::find($user->getRoomID()))) {
             return response()->json(['message' => 'User is not in a room'], 302);
         }
         $status = $room->analyze(true);
-        Action::add('leave', $room->id, ['user_id' => $user_id = $user->id]);
+        Action::add($kick ? 'kick' : 'leave', $room->id, ['user_id' => $user_id = $user->id]);
         $is_turn = $status['current'] == $user_id;
         $is_dealer = $status['dealer'] == $user_id;
         $status = $room->analyze(true);

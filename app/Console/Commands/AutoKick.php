@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Console\Command;
-use App\Models\Action;
+use App\Http\Controllers\GameController;
 use App\Models\User;
 use App\Models\Room;
 
@@ -30,6 +30,7 @@ class AutoKick extends Command
 
     public function handle()
     {
+        $this->Game = new GameController;
         $rooms = Room::get();
         $this->info('Rooms: '.count($rooms));
         $now = date('Y-m-d H:i:s');
@@ -48,8 +49,8 @@ class AutoKick extends Command
             $this->info('Room '.$room->id.' is inactive');
             return; // room is inactive
         }
-        Action::add('kick', $room->id, ['user_id' => $status['current']]);
-        $this->info('Kick User '.User::find($status['current'])->id.' from Room '.$room->id);
+        $this->Game->leaveRoom($user = User::find($status['current']), true);
+        $this->info('Kick User '.$user->id.' from Room '.$room->id);
     }
 
 }

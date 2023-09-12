@@ -353,13 +353,15 @@ class GameTest extends TestCase
         $response->assertOk();
         $this->assertCase(array_keys($response['players']) == [6,4,2,3], $response);
         $this->assertCase($response['playing'] == [6,4], $response);
-        $response = $this->actingAs(User::find(4))->post('/api/games', ['action' => 'leave']);
-        $response->assertOk();
+        $response = $this->actingAs($user = User::find(4))->post('/api/games', ['action' => 'leave']);
+        $this->assertResponse($response, 'room_id', 0);
+        $this->assertResponse($response, 'message', 'You left the room');
+        $this->assertCase(0 == $user->getRoomID(true), $user);
         $response = $this->get('/api/games/1');
         $this->assertCase($response['dealer'] == 2, $response);
         $this->assertCase($response['current'] == 3, $response);
-        $response = $this->actingAs(User::find(6))->post('/api/games', ['action' => 'leave']);
-        $response->assertOk();
+        $response = $this->actingAs($user = User::find(6))->post('/api/games', ['action' => 'leave']);
+        $this->assertResponse($response, 'room_id', 0);
         $response = $this->get('/api/games/1');
         $this->assertCase($response['deck'] == 42, $response);
         $this->assertCase($response['pot'] == 18, $response);
@@ -386,9 +388,11 @@ class GameTest extends TestCase
 
     public function test_join_an_empty_room(): void
     {
+        $room = Room::find(1);
+        $status = $room->analyze();
+        $this->assertTrue(empty($status['players']));
         $response = $this->actingAs(User::factory()->create())->post('/api/games');
-        $room_name = Room::find(1)->name;
-        $this->__checkResponseMessage($response, 'You joined Room '.$room_name.' (1)');
+        $this->__checkResponseMessage($response, 'You joined Room '.$room->name.' (1)');
         $this->assertTrue(array_keys($response['players']) == [7]);
     }
 
@@ -407,7 +411,7 @@ class GameTest extends TestCase
     public function test_middle_player_leaving_in_turn(): void 
     {
         $user = User::find(4);
-        $this->assertTrue($user->getRoomID() == 0);
+        $this->assertEquals(0, $user->getRoomID());
         $response = $this->actingAs($user)->post('/api/games/1');
         $this->assertResponse($response, 'room_id', 1);
         $response = $this->actingAs(User::find(8))->post('/api/games', ['action' => 'pass']);
@@ -467,6 +471,8 @@ class GameTest extends TestCase
 
     public function test_creating_a_duplicate_named_room(): void 
     {
+        $room = Room::where('name', 'Test')->first();
+        $this->assertTrue(!empty($room->id));
         $response = $this->actingAs(User::find(3))->post('/api/games', ['action' => 'create', 'name' => $name = 'Test']);
         $this->__checkResponseMessage($response, 'That Room name already exists: '.$name, 302);
     }

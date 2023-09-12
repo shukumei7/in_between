@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 use App\Models\Action;
+use App\Models\Variable;
 
 class User extends Authenticatable
 {
@@ -52,6 +53,11 @@ class User extends Authenticatable
     public function actions(): HasMany
     {
         return  $this->hasMany(Action::class);
+    }
+
+    public function variables(): HasMany
+    {
+        return $this->hasMany(Variable::class);
     }
 
     private $__room_id = null;

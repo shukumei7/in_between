@@ -96,9 +96,10 @@ class BotTest extends TestCase
     public function test_play_in_inactive_room(): void {
         $room = Room::find(1);
         $status = $room->analyze();
-        Action::add('kick', 1, ['user_id' => 1]);
-        Action::add('kick', 1, ['user_id' => 2]);
-        Action::add('kick', 1, ['user_id' => 3]);
+        $Game = new GameController;
+        $Game->leaveRoom(User::find(1), true);
+        $Game->leaveRoom(User::find(2), true);
+        $Game->leaveRoom(User::find(3), true);
         $status = $room->analyze(true);
         $this->assertCase(!empty($status['players'][4]), $status);
         $this->withoutMockingConsoleOutput()->artisan('bots:run');
@@ -148,6 +149,7 @@ class BotTest extends TestCase
             // not activated
             dump($status);
             dd('Room not activated');
+            die;
             return;
         }
         if(empty($status['hands'][$status['current']])) {
@@ -163,15 +165,7 @@ class BotTest extends TestCase
         // kick random bot
         $count = User::count();
         while(empty($bot = User::find(rand(0, $count - 1))) || empty($room_id = $bot->getRoomID(true)));
-        (new GameController())->leaveRoom($bot);
-        // Action::add('leave', $room_id, ['user_id' => $bot->id]);
-        return;
-        /*
-        $status = $room->analyze(true);
-        if(count($status['players']) > 1 && empty($status['playing'])) {
-            dd($status);
-        }
-        */
+        (new GameController())->leaveRoom($bot, true);
     }
     
     private function __testPlaying($output, $bot_id, $bet = null, $points = null, $pot = null) {
@@ -180,25 +174,6 @@ class BotTest extends TestCase
             return;
         } 
         $this->assertTrue(true == preg_match('/Bot '.$bot_id.' played and (won|lost) \d+/', $output));
-        /*
-        $points = User::find($bot_id)->getPoints();
-        $status = Room::find($room_id)->analyze();
-        if(strstr($output, 'won')) {
-            $this->assertTrue($output, 'Bot '.$bot_id.' played on Room '.$room_id.' and won '.number_format($bet));    
-            return;
-        }
-        $this->assertTrue($output, 'Bot '.$bot_id.' played on Room '.$room_id.' and lost '.number_format($bet));
-        */
     }
 
-/*
-    public function test_auto_kick(): void
-    {
-        $this->artisan('game:auto-kick')
-            // ->expectsConfirmation('Do you really wish to import products?', 'no')
-            // ->expectsOutput('Import cancelled')
-            // ->doesntExpectOutput('Products imported')
-            ->assertExitCode(0);
-    }
-*/
 }

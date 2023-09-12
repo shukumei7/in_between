@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
+use App\Models\Variable;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -18,16 +19,20 @@ abstract class TestCase extends BaseTestCase
         User::truncate();
         Room::truncate();
         Action::truncate();
+        Variable::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
     }
 
     protected function _checkResponseMessage($response, $message, $code = 200) {
+        return $this->assertResponse($response, 'message', $message, $code);
+        /*
         if($response['message'] != $message) {
             $trace = debug_backtrace()[1]['line'];
             dd(compact('response', 'message', 'trace'));
         }
         $this->assertTrue($response['message'] == $message);
         $response->assertStatus($code);
+        */
     }
 
     public function assertCase($case, $context): void 
@@ -50,6 +55,6 @@ abstract class TestCase extends BaseTestCase
             dd(compact('response', 'expected', 'value', 'trace'));
         }
         $response->assertStatus($code);
-        $this->assertTrue($response[$field] == $value);
+        $this->assertEquals($value, $response[$field]);
     }
 }

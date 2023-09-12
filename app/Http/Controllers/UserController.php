@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Models\User;
+use App\Models\Room;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -76,16 +77,15 @@ class UserController extends Controller
 
     private function __returnLogin() {
         $user = Auth::user();
-        $user->points_updated_at = null;
         $user->save();
         return response()->json([
             'message'   => 'You are logged in',
             'token'     => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
-            'name'      => $user->name,
+            'user_name' => $user->name,
             'user_id'   => $user->id,
-            'room_id'   => $user->getRoomID(),
+            'room_id'   => $room_id = $user->getRoomID(),
             'points'    => $user->getPoints()
-        ], 202);
+        ] + ($room_id ? Room::find($room_id)->analyze() : []), 202);
     }
 
     public function update(Request $request, $id) {
@@ -195,7 +195,6 @@ class UserController extends Controller
             'joined'            => $user->created_at,
             'verified'          => !empty($user->email_verified_at) ? 'yes' : 'no',
             'points'            => $user->getPoints(),
-            'points_updated_at' => $user->points_updated_at,
             'current_room_id'   => $user->getRoomID()
         ], 200);
     }
