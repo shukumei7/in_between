@@ -26,6 +26,7 @@ Route::post('/accounts', [UserController::class, 'register']);
 Route::get('/games/{id}', [GameController::class, 'spectate']);
 Route::middleware('auth:sanctum')->put('/accounts/{id}', [UserController::class, 'update']);
 Route::middleware('auth:sanctum')->get('/accounts/{id}', [UserController::class, 'view']);
+Route::middleware('auth:sanctum')->delete('/accounts', [UserController::class, 'logout']);
 Route::middleware('auth:sanctum')->get('/games', [GameController::class, 'status']);
 Route::middleware('auth:sanctum')->post('/games', [GameController::class, 'play']);
 Route::middleware('auth:sanctum')->post('/games/{id}', [GameController::class, 'join']);

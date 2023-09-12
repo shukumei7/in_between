@@ -12,4 +12,10 @@ if(!function_exists('get_time_remaining')) {
     function json_to_array($json) {
         return (array) json_decode($json->content(), true);
     }
+
+    function trace($lines = 3) {
+        return array_map(function($stack) {
+            return array_intersect_key($stack, array('file' => 1, 'line' => 1));
+        }, array_slice(debug_backtrace(), 0, $lines));
+    }
 }

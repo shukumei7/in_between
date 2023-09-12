@@ -6,12 +6,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
-
+use App\Http\Controllers\GameController;
 use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
 
-class CommandTest extends TestCase
+class BotTest extends TestCase
 {
 
     public function test_begin_populating(): void 
@@ -105,7 +105,7 @@ class CommandTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 7');
         $this->assertTrue($output[1] == 'Available Rooms: 2');
-        $this->assertTrue($output[2] == 'Room 1: [4x]');
+        $this->assertCase($output[2] == 'Room 1: [4x]', $output);
         $this->assertCase($output[3] == 'Added Bot 1', $output);
         $this->assertTrue($output[4] == 'Room 2: [5dc,6,7x]');
         $this->assertTrue($output[5] == 'Added Bot 2');
@@ -126,9 +126,52 @@ class CommandTest extends TestCase
     public function test_continuous_play(): void
     {
         for($x = 0; $x < 50; $x++) {
-            $this->artisan('bots:run')
-                ->assertExitCode(0);
+            $this->artisan('bots:run')->assertExitCode(0);
+            $this->__kickRandomBot();
+            $this->__checkAllRooms();
         }
+    }
+
+    private function __checkAllRooms() {
+        $rooms = Room::get();
+        foreach($rooms as $room) {
+            $this->__checkRoom($room);
+        }
+    }
+
+    private function __checkRoom($room) {
+        $status = $room->analyze(true);
+        if(count($status['players']) < 2) {
+            return; // nothing to check
+        }
+        if($status['dealer'] == 0 || $status['current'] == 0) {
+            // not activated
+            dump($status);
+            dd('Room not activated');
+            return;
+        }
+        if(empty($status['hands'][$status['current']])) {
+            // hands empty
+            dump($status);
+            dump('Player hands empty');
+            die;
+            return;
+        }
+    }
+
+    private function __kickRandomBot() {
+        // kick random bot
+        $count = User::count();
+        while(empty($bot = User::find(rand(0, $count - 1))) || empty($room_id = $bot->getRoomID(true)));
+        (new GameController())->leaveRoom($bot);
+        // Action::add('leave', $room_id, ['user_id' => $bot->id]);
+        return;
+        /*
+        $status = $room->analyze(true);
+        if(count($status['players']) > 1 && empty($status['playing'])) {
+            dd($status);
+        }
+        */
     }
     
     private function __testPlaying($output, $bot_id, $bet = null, $points = null, $pot = null) {

@@ -26,6 +26,7 @@ abstract class TestCase extends BaseTestCase
             $trace = debug_backtrace()[1]['line'];
             dd(compact('response', 'message', 'trace'));
         }
+        $this->assertTrue($response['message'] == $message);
         $response->assertStatus($code);
     }
 
@@ -35,5 +36,20 @@ abstract class TestCase extends BaseTestCase
             $trace = debug_backtrace()[0]['line'];
             dd(compact('context', 'trace'));
         }
+        $this->assertTrue($case);
+    }
+
+    public function assertResponse($response, $field, $value, $code = 200) {
+        if(($return = $response->getStatusCode()) != $code) {
+            $trace = debug_backtrace()[0]['line'];
+            dd(compact('response', 'code', 'return', 'trace'));
+        }
+        if(!isset($response[$field]) || $response[$field] != $value) {
+            $trace = debug_backtrace()[0]['line'];
+            $expected = !isset($response[$field]) ? $field.' is not set' : $response[$field];
+            dd(compact('response', 'expected', 'value', 'trace'));
+        }
+        $response->assertStatus($code);
+        $this->assertTrue($response[$field] == $value);
     }
 }

@@ -83,7 +83,8 @@ class UserController extends Controller
             'token'     => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
             'name'      => $user->name,
             'user_id'   => $user->id,
-            'room_id'   => $user->getRoomID()
+            'room_id'   => $user->getRoomID(),
+            'points'    => $user->getPoints()
         ], 202);
     }
 

@@ -64,7 +64,7 @@ class RunBots extends Command
             $acted = true;
         } 
         if(!empty($user_id = $status['current']) && ($bot = $this->__getBot($user_id)) && !empty($move = $bot->decideMove($status + ['hand' => $room->getHand($bot->id)]))) {
-            $this->__analyzeMove($bot, $room, $move, $status);
+            $this->__analyzeMove($bot, $move, $status);
             $status = $this->Game->checkEndRound([], $status);
         }
         return $acted;
@@ -73,34 +73,35 @@ class RunBots extends Command
         }
     }
 
-    private function __analyzeMove($bot, $room, $move, $status) {
+    private function __analyzeMove($bot, $move, $status) {
+        $room = Room::find($status['room_id']);
         switch($move['action']) {
             case 'pass':
                 Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
                 $this->info('Bot '.$bot->id.' passed');
                 return;
             case 'play':
-                $this->__playMove($bot, $room, $move['bet'], $status);       
+                $this->__playMove($bot, $move['bet'], $status);       
                 return;
         }
     }
 
-    private function __playMove($bot, $room, $bet, $status) {
-        $this->Game->playHand($bot, $room, $bet, $status);
+    private function __playMove($bot, $bet, $status) {
+        $this->Game->playHand($bot, $bet);
         $this->info('Bot '.$bot->id.' played and '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)));
-        $bet < 0 && $this->__kickBot($bot, $room, $status);
+        $bet < 0 && $this->__kickBot($bot, $status);
     }
 
-    private function __kickBot($bot, $room, $status) {
-        if(count($status['players']) >= $room->max_players) {
+    private function __kickBot($bot, $status) {
+        if(count($status['players']) >= Room::find($status['room_id'])->max_players) {
             $this->info('Bot '.$bot->id.' is giving space');
-            return Action::add('leave', $room->id, ['user_id' => $bot->id]);
+            return $this->Game->leaveRoom($bot); // Action::add('leave', $room->id, ['user_id' => $bot->id]);
         } 
         if(BOT_DEFEATED > $bot->getPoints()) {
             $this->info('Bot '.$bot->id.' is defeated');
             $bot->type = 'disabled';
             $bot->save();
-            return Action::add('leave', $room->id, ['user_id' => $bot->id]);
+            return $this->Game->leaveRoom($bot); // Action::add('leave', $room->id, ['user_id' => $bot->id]);
         }
     }
 

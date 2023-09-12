@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 use App\Models\User;
 use App\Models\Action;
@@ -79,8 +80,12 @@ class Room extends Model
             return $this->__status;
         }
         $active = count($this->__players) > 1;
+        $playing = $this->__getPlaying();
+        $users = User::whereIn('id', $playing)->get();
+        $points = array_map(function($a) { return STARTING_MONEY + $a; }, Action::select('user_id', DB::raw('sum(bet) as points'))->whereIn('user_id', $playing)->groupBy('user_id')->get()->pluck('points', 'user_id')->toArray());
+        $names = User::whereIn('id', Action::whereNotNull('user_id')->pluck('user_id')->toArray())->pluck('name', 'id')->toArray();
         $this->__status = [
-            'activities'   => $this->__activities,
+            'activities'    => array_map(function($event) use ($names) { if($event['user_id']) $event['name'] = $names[$event['user_id']]; return $event; }, $this->__activities),
             'room_id'       => $this->id,
             'room_name'     => $this->name,
             'deck'          => 52 - count($this->__dealt),
@@ -88,21 +93,19 @@ class Room extends Model
             'hidden'        => count($this->__dealt) - count($this->__discards),
             'pot'           => $this->__pot,
             'players'       => array_replace(array_flip($this->__players), User::whereIn('id', $this->__players)->pluck('name', 'id')->toArray()),
-            'playing'       => $playing = $this->__getPlaying(),
+            'playing'       => $playing,
             'dealer'        => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
             'current'       => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
+            'hands'         => array_map(function($a) { return !empty($a) ? 1: 0; }, $this->__hands),
+            'scores'        => $points
         ];
         if(env('APP_ENV') == 'testing') {
-            $users = User::whereIn('id', $playing)->get();
-            $points = [];
-            foreach($users as $user) {
-                $points[$user->id] = $user->getPoints();
-            }
-            $this->__status += [   // debug
-                'hands'     => $this->__hands,
-                'dealt'     => $this->__dealt,
-                'scores'    => $points
-            ];
+            $this->__status['hands'] = $this->__hands;
+            $this->__status['dealt'] = $this->__dealt;
+            $this->__status['previous'] = $this->__previous;
+            $this->__status['dealer_index'] = $this->__dealer;
+            $this->__status['current_index'] = $this->__turn;
+            $this->__status['pots'] = array_keys($this->__pots);
             return $this->__status;
         }
         return $this->__status;
@@ -204,11 +207,7 @@ class Room extends Model
     }
 
     private function __addPlayer($user_id) { // TODO: improve logic
-        $this->__previous = [
-            'players'   => $this->__players,
-            'playing'   => $this->__getPlaying()
-        ];
-        if($this->__dealer > 0 && $this->__dealer < count($this->__getPlaying()) - 1) {
+        if(count($this->__players) > 1 && $this->__dealer > 0 && $this->__dealer < count($playing = $this->__getPlaying()) - 1) {
             array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
         }
@@ -216,33 +215,51 @@ class Room extends Model
     }
 
     private function __removePlayer($user_id) { // TODO: consider shifting dealer and turn
+        
+        if(false === $global_index = array_search($user_id, $players = $this->__players)) {
+            // $trace = trace(3);
+            // dump(compact('user_id', 'global_index', 'players', 'trace'));
+            return; // invalid leaving
+        }
         $this->__previous = [
-            'players'   => $this->__players,
-            'playing'   => $this->__getPlaying()
+            'players'       => $this->__players,
+            'playing'       => $playing = $this->__getPlaying(),
+            'hands'         => $this->__hands,
+            'dealer_index'  => $this->__dealer,
+            'turn_index'    => $this->__turn,
+            'leaver_index'  => $player_index = array_search($user_id, $playing),
+            'change_turn'   => 'none',
+            'change_dealer' => 'none'
         ];
-        unset($this->__players[$player_index = array_search($user_id, $this->__players)]);
-        $players = $this->__players = array_values($this->__players);
+        unset($this->__players[$global_index]);
+        $this->__players = array_values($this->__players);
         if(!isset($this->__pots[$user_id])) {
             return; // left before playing
         }
-        $playing = $this->__getPlaying(); // get before clearing
-        // $is_dealer = $playing[$this->__dealer] == $user_id;
-        $hands = $this->__hands[$user_id]; // get before clearing
+        if(!isset($this->__hands[$user_id])) {
+            dump($this->getStatus()); // hwuat?
+            dump(trace(6));
+            die;
+        }
         unset($this->__pots[$user_id]); // clear player data
         unset($this->__hands[$user_id]); // clear player data
-        if($this->__turn == $this->__dealer) {
-            return; // should be solved by rotating
+        if(count($playing) <=2) {
+            $this->__current = $this->__dealer = 0;
+            return;
         }
-        if($this->__turn >= count($playing)) {
-            $this->__checkTurn();
-        } else if(empty($hands)) { // turn is done
+        $current_turn = $playing[$this->__turn];
+        if($player_index < $this->__turn) { // turn is done
+            $this->__previous['change_turn'] = '-1';
             $this->__turn--;    
             $this->__checkTurn();
+        } else if($this->__turn >= count($playing) - 1 || $player_index == $this->__turn) {
+            $this->__checkTurn();
         }
-        if($player_index <= $this->__dealer) {
+        if($player_index < $this->__dealer || ($player_index == $this->__dealer && !empty($this->__hands[$current_turn]))) {
+            $this->__previous['change_dealer'] = '-1';
             $this->__dealer--;
             $this->__checkDealer();
-        } else if($this->__dealer >= count($playing)) {
+        } else if($this->__dealer >= count($playing) - 1) {
             $this->__checkDealer();
         }
     }
@@ -253,10 +270,11 @@ class Room extends Model
     }
 
     private function __checkDealer() {
+        $playing = $this->__getPlaying();
         if($this->__dealer < 0) {
-            $this->__dealer = count($this->__getPlaying()) - 1;
+            $this->__dealer = max(0, count($playing) - 1);
         }
-        if($this->__dealer >= count($this->__getPlaying())) {
+        if($this->__dealer >= count($playing)) {
             $this->__dealer = 0;
         }
     }
@@ -291,6 +309,9 @@ class Room extends Model
         !isset($this->__hands[$user_id]) && $this->__hands[$user_id] = [];
         $this->__hands[$user_id] []= $card;
         count($this->__hands[$user_id]) == 2 && sort($this->__hands[$user_id]);
+        // reset turn to enforce start of round
+        $this->__turn = $this->__dealer + 1;
+        $this->__checkTurn();
     }
 
     private function __nextPlayer() {

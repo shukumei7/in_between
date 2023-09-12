@@ -64,7 +64,6 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs(User::find(1))->get('/api/games');
         $this->__checkResponseMessage($response, 'Waiting for more players');
-        $this->assertTrue(!isset($response['points']));
     }
 
     public function test_spectating_on_invalid_room(): void
@@ -108,7 +107,7 @@ class GameTest extends TestCase
         $this->assertTrue($response['pot'] == 4);
         $this->assertTrue($response['dealer'] == 1);
         $this->assertTrue($response['current'] == 2);
-        $this->assertTrue($response['points'] == STARTING_MONEY - 2);
+        $this->assertCase($response['points'] == STARTING_MONEY - 2, $response);
     }
 
     public function test_checking_status_of_inactive_player(): void
@@ -122,14 +121,12 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs(User::find(1))->post('/api/games', ['action' => 'test']);
         $this->__checkResponseMessage($response, 'It is not your turn');
-        $this->assertTrue(!isset($response['points']));
     }
 
     public function test_checking_status_in_turn(): void
     {
         $response = $this->actingAs(User::find(2))->get('/api/games');
         $this->__checkResponseMessage($response, 'It is your turn!');
-        $this->assertTrue(!isset($response['points']));
     }
 
     public function test_trying_to_take_an_invalid_action(): void
@@ -281,7 +278,7 @@ class GameTest extends TestCase
         $status = $this->get('/api/games/1');
         $status->assertOk();
         $this->assertTrue($status['dealer'] == 3);
-        $this->assertTrue($status['current'] == 1);
+        $this->assertCase($status['current'] == 1, $status);
     }
 
     public function test_player_at_the_start_of_list_leaving(): void 
@@ -291,7 +288,7 @@ class GameTest extends TestCase
         $status = $this->get('/api/games/1');
         $status->assertOk();
         $this->assertTrue($status['dealer'] == 3);
-        $this->assertTrue($status['current'] == 2);
+        $this->assertCase($status['current'] == 2, $status);
     }
 
     public function test_dealer_leaves_in_turn(): void  // most conflict
@@ -302,8 +299,9 @@ class GameTest extends TestCase
         $response->assertOk();
         $status = $this->get('/api/games/1');
         $status->assertOk();
-        $this->assertTrue($status['pot'] == 12);
-        $this->assertTrue($status['dealer'] == 4);
+        $this->assertCase($status['playing'] == [2,6,4], $status);
+        $this->assertCase($status['pot'] == 12, $status);
+        $this->assertCase($status['dealer'] == 4, $status);
         $this->assertTrue($status['current'] == 2);
     }
 
@@ -313,8 +311,8 @@ class GameTest extends TestCase
         $response->assertOk();
         $status = $this->get('/api/games/1');
         $status->assertOk();
-        $this->assertTrue($status['dealer'] == 6);
-        $this->assertTrue($status['current'] == 2);
+        $this->assertCase($status['dealer'] == 6, $status);
+        $this->assertCase($status['current'] == 2, $status);
     }
 
     public function test_second_to_the_last_player_leaves(): void // confusion
@@ -332,11 +330,50 @@ class GameTest extends TestCase
     {
         $response = $this->actingAs(User::find(6))->post('/api/games', ['action' => 'pass']);
         $this->__checkResponseMessage($response, 'Waiting for more players', 302);
+        $this->assertCase($response['dealer_index'] == 0, $response);
+    }
+
+    public function test_joining_to_reactivate_room_midplay(): void 
+    {
+        $response = $this->actingAs(User::find(4))->post('/api/games/1');
+        $response->assertOk();
+        $this->assertCase($response['deck'] == 48, $response);
+        $this->assertCase($response['pot'] == 14, $response);
+        $this->assertCase(array_keys($response['players']) == [6,4], $response);
+        $this->assertCase($response['playing'] == [6,4], $response);
+        $this->assertCase($response['dealer'] == 6, $response);
+        $this->assertCase($response['current'] == 4, $response);
+    }
+
+    public function test_waiting_players_can_reactivate_empty_room(): void
+    {
+        $response = $this->actingAs(User::find(2))->post('/api/games/1');
+        $response->assertOk();
+        $response = $this->actingAs(User::find(3))->post('/api/games/1');
+        $response->assertOk();
+        $this->assertCase(array_keys($response['players']) == [6,4,2,3], $response);
+        $this->assertCase($response['playing'] == [6,4], $response);
+        $response = $this->actingAs(User::find(4))->post('/api/games', ['action' => 'leave']);
+        $response->assertOk();
+        $response = $this->get('/api/games/1');
+        $this->assertCase($response['dealer'] == 2, $response);
+        $this->assertCase($response['current'] == 3, $response);
+        $response = $this->actingAs(User::find(6))->post('/api/games', ['action' => 'leave']);
+        $response->assertOk();
+        $response = $this->get('/api/games/1');
+        $this->assertCase($response['deck'] == 42, $response);
+        $this->assertCase($response['pot'] == 18, $response);
+        $this->assertCase(array_keys($response['players']) == [2,3], $response);
+        $this->assertCase($response['playing'] == [2,3], $response);
+        $this->assertCase($response['dealer'] == 2, $response);
+        $this->assertCase($response['current'] == 3, $response);
     }
 
     public function test_leaving_as_last_player(): void 
     {
-        $response = $this->actingAs(User::find(6))->post('/api/games', ['action' => 'leave']);
+        $response = $this->actingAs(User::find(2))->post('/api/games', ['action' => 'leave']);
+        $response->assertOk();
+        $response = $this->actingAs(User::find(3))->post('/api/games', ['action' => 'leave']);
         $response->assertOk();
         $status = $this->get('/api/games/1');
         $this->__checkResponseMessage($status, 'You are spectating. Waiting for more players');
@@ -363,8 +400,45 @@ class GameTest extends TestCase
         $this->assertTrue(array_keys($response['players']) == [7,8]);
         $this->assertTrue($response['dealer'] == 7);
         $this->assertTrue($response['current'] == 8);
-        $this->assertTrue($response['pot'] == 16);
+        $this->assertCase($response['pot'] == 22, $response);
         $this->assertTrue($response['deck'] == 48);
+    }
+
+    public function test_middle_player_leaving_in_turn(): void 
+    {
+        $user = User::find(4);
+        $this->assertTrue($user->getRoomID() == 0);
+        $response = $this->actingAs($user)->post('/api/games/1');
+        $this->assertResponse($response, 'room_id', 1);
+        $response = $this->actingAs(User::find(8))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $response = $this->actingAs(User::find(7))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $this->assertCase($response['playing'] == [7,8,4], $response);
+        $this->assertCase($response['dealer'] == 8, $response);
+        $this->assertCase($response['current'] == 4, $response);
+        $this->assertCase($response['pot'] == 24, $response);
+        $this->assertCase($response['deck'] == 42, $response);
+        $response = $this->actingAs(User::find(4))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $response = $this->actingAs(User::find(7))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $response = $this->actingAs(User::find(8))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $response = $this->get('/api/games/1');
+        $this->assertCase($response['playing'] == [7,8,4], $response);
+        $this->assertCase($response['dealer'] == 4, $response);
+        $this->assertCase($response['current'] == 7, $response);
+        $response = $this->actingAs(User::find(7))->post('/api/games', ['action' => 'pass']);
+        $response->assertOk();
+        $response = $this->actingAs(User::find(8))->post('/api/games', ['action' => 'leave']);
+        $response->assertOk();
+        $response = $this->get('/api/games/1');
+        $this->assertCase($response['playing'] == [7,4], $response);
+        $this->assertCase($response['dealer'] == 4, $response);
+        $this->assertCase($response['current'] == 4, $response);
+        $this->assertCase(!empty($response['hands'][4]), $response);
+        $this->assertCase(empty($response['hands'][7]), $response);
     }
 
     public function test_creating_a_new_room(): void 
@@ -396,7 +470,7 @@ class GameTest extends TestCase
         $response = $this->actingAs(User::find(3))->post('/api/games', ['action' => 'create', 'name' => $name = 'Test']);
         $this->__checkResponseMessage($response, 'That Room name already exists: '.$name, 302);
     }
-
+/*
     public function test_bots_playing(): void 
     {
         $room = Room::find(1);
@@ -426,7 +500,8 @@ class GameTest extends TestCase
             $status['points'] = $user->getPoints(true);
             $status['user_id'] = $user->id;
             if(false === $move = $user->decideMove($status)) {
-                dd($status);
+                // dump($status);
+                dd('Cannot decide move');
             }
             $response = $this->actingAs($user)->post('/api/games/', $move);
             if($response->getStatusCode() != 200) {
@@ -441,9 +516,9 @@ class GameTest extends TestCase
             }
         } while($turns++ < 50);
         foreach($users as $user) {
-            var_dump($user->name.' : '.$user->remember_token.' : '.$user->getPoints());
+            dump($user->name.' : '.$user->remember_token.' : '.$user->getPoints());
         }
         // dd($status['activities']);
     }
-    
+*/
 }
