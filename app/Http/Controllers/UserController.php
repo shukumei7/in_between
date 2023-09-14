@@ -33,7 +33,8 @@ class UserController extends Controller
         $user->remember_token = Str::random(TOKEN_LENGTH);
         $user->save();
         Auth::login($user, true);
-        return $this->__returnNewUser($user->id, $user->remember_token, $user->createToken('IB')->plainTextToken);
+        return $this->__returnLogin('New user created!');
+        // return $this->__returnNewUser($user->id, $user->name, $user->remember_token, $user->createToken('IB')->plainTextToken);
     }
 
     private function __registerNamedGuest($name) {
@@ -45,13 +46,21 @@ class UserController extends Controller
         $user->remember_token = Str::random(TOKEN_LENGTH);
         $user->save();
         Auth::login($user);
-        return $this->__returnNewUser($user->id, $user->remember_token, $user->createToken('IB')->plainTextToken);
+        return $this->__returnLogin('New user created!');
+        // return $this->__returnNewUser($user->id, $user->name, $user->remember_token, $user->createToken('IB')->plainTextToken);
     }
-
-    private function __returnNewUser($user_id, $token = null, $access = null) {
-        return response()->json(['message' => 'New user created!', 'user_id' => $user_id] + ($token ? ['token' => $token] : []) + ($access ? ['access' => $access] : []), 201);
+/*
+    private function __returnNewUser($user_id, $user_name, $token = null, $access = null) {
+        return response()->json([
+            'message'   => 'New user created!', 
+            'user_id'   => $user_id,
+            'user_name' => $user_name
+            ] + 
+            ($token ? ['token' => $token] : []) + 
+            ($access ? ['access' => $access] : [])
+        , 201);
     }
-
+*/
     private $__active_user_types = ['user', 'admin'];
 
     private function __slowLogin($request) {
@@ -75,12 +84,14 @@ class UserController extends Controller
         return $this->__returnLogin();
     }
 
-    private function __returnLogin() {
+    private function __returnLogin($message = 'You are logged in') {
         $user = Auth::user();
+        $user->remember_token = Str::random(10);
         $user->save();
         return response()->json([
-            'message'   => 'You are logged in',
-            'token'     => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
+            'message'   => $message,
+            'access'    => $user->createToken(env('APP_NAME', 'In Between'))->plainTextToken,
+            'token'     => $user->remember_token,
             'user_name' => $user->name,
             'user_id'   => $user->id,
             'room_id'   => $room_id = $user->getRoomID(),

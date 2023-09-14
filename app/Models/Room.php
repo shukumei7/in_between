@@ -96,7 +96,7 @@ class Room extends Model
             'playing'       => $playing,
             'dealer'        => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
             'current'       => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
-            'hands'         => array_map(function($a) { return !empty($a) ? 1: 0; }, $this->__hands),
+            'hands'         => array_map(function($a) { return count($a); }, $this->__hands),
             'scores'        => $points
         ];
         if(env('APP_ENV') == 'testing') {
@@ -306,7 +306,7 @@ class Room extends Model
 
     private function __dealCard($user_id, $card) {
         $this->__dealt []= $card;
-        !isset($this->__hands[$user_id]) && $this->__hands[$user_id] = [];
+        (!isset($this->__hands[$user_id]) || count($this->__hands[$user_id]) > 2) && $this->__hands[$user_id] = []; // reset hand on first deal
         $this->__hands[$user_id] []= $card;
         count($this->__hands[$user_id]) == 2 && sort($this->__hands[$user_id]);
         // reset turn to enforce start of round
@@ -325,7 +325,7 @@ class Room extends Model
         $this->__discards []= $card;
         $this->__discards []= min($this->__hands[$user_id]);
         $this->__discards []= max($this->__hands[$user_id]);
-        $this->__hands[$user_id] = [];
+        $this->__hands[$user_id] []= $card; // keep hand for self reference
         $this->__nextPlayer();
     }
 }

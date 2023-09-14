@@ -255,7 +255,7 @@ class GameController extends Controller
     }
 
     private function __getUserStatus($status) {
-        if(empty($user = $this->__user)) {
+        if(empty($user = $this->__user ?: Auth::user()) || $status['room_id'] != $user->getRoomID()) {
             return [];
         }
         $room = $this->__room;
@@ -317,8 +317,8 @@ class GameController extends Controller
             return false; // throw new Exception($message);
         }
         $status = $room->analyze();
-        if(!isset($status['hands'][$user_id = $user->id]) || empty($hand = $status['hands'][$user_id = $user->id]) || !is_array($hand)) {
-            dump($status);
+        if(empty($hand = $room->getHand($user_id = $user->id))) {
+            dump(compact('status', 'hand'));
             dump($message = 'User has no hand: User ID '.$user_id);
             return false; // throw new Exception($message);
         }

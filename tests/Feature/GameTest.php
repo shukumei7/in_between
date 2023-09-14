@@ -356,7 +356,7 @@ class GameTest extends TestCase
         $response = $this->actingAs($user = User::find(4))->post('/api/games', ['action' => 'leave']);
         $this->assertResponse($response, 'room_id', 0);
         $this->assertResponse($response, 'message', 'You left the room');
-        $this->assertCase(0 == $user->getRoomID(true), $user);
+        $this->assertCase(0 == $user->getRoomID(true), $response);
         $response = $this->get('/api/games/1');
         $this->assertCase($response['dealer'] == 2, $response);
         $this->assertCase($response['current'] == 3, $response);
