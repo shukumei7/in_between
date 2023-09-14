@@ -44,6 +44,7 @@ class Room extends Model
     private $__turn = 0;
     private $__previous_time = 0;
     private $__activities = [];
+    private $__scores = [];
 
     public function analyze($refresh = false) {
         if($this->__status && !$refresh) {
@@ -82,7 +83,6 @@ class Room extends Model
         $active = count($this->__players) > 1;
         $playing = $this->__getPlaying();
         $users = User::whereIn('id', $playing)->get();
-        $points = array_map(function($a) { return STARTING_MONEY + $a; }, Action::select('user_id', DB::raw('sum(bet) as points'))->whereIn('user_id', $playing)->groupBy('user_id')->get()->pluck('points', 'user_id')->toArray());
         $names = User::whereIn('id', Action::whereNotNull('user_id')->pluck('user_id')->toArray())->pluck('name', 'id')->toArray();
         $this->__status = [
             'activities'    => array_map(function($event) use ($names) { if($event['user_id']) $event['name'] = $names[$event['user_id']]; return $event; }, $this->__activities),
@@ -97,7 +97,7 @@ class Room extends Model
             'dealer'        => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
             'current'       => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
             'hands'         => array_map(function($a) { return count($a); }, $this->__hands),
-            'scores'        => $points
+            'scores'        => $this->__scores
         ];
         if(env('APP_ENV') == 'testing') {
             $this->__status['hands'] = $this->__hands;
@@ -207,6 +207,7 @@ class Room extends Model
     }
 
     private function __addPlayer($user_id) { // TODO: improve logic
+        $this->__scores[$user_id] = 0;
         if(count($this->__players) > 1 && $this->__dealer > 0 && $this->__dealer < count($playing = $this->__getPlaying()) - 1) {
             array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
@@ -231,6 +232,7 @@ class Room extends Model
             'change_turn'   => 'none',
             'change_dealer' => 'none'
         ];
+        unset($this->__scores[$user_id]);
         unset($this->__players[$global_index]);
         $this->__players = array_values($this->__players);
         if(!isset($this->__pots[$user_id])) {
@@ -267,6 +269,13 @@ class Room extends Model
     private function __getPot($user_id, $bet) {
         $this->__pot -= $bet;
         $this->__pots[$user_id] = $bet;
+        if(!isset($this->__scores[$user_id])) {
+            $activities = $this->__activities;
+            $players = $this->__players;
+            $scores = $this->__scores;
+            dd(compact('activities', 'players', 'scores', 'user_id'));
+        }
+        $this->__scores[$user_id] += $bet;
     }
 
     private function __checkDealer() {
@@ -321,6 +330,7 @@ class Room extends Model
 
     private function __play($user_id, $bet, $card) {
         $this->__pot -= $bet;
+        $this->__scores[$user_id] += $bet;
         $this->__dealt []= $card;
         $this->__discards []= $card;
         $this->__discards []= min($this->__hands[$user_id]);
