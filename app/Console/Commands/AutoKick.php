@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Console\Command;
 use App\Http\Controllers\GameController;
 use App\Models\User;
+use App\Models\Action;
 use App\Models\Room;
 
 class AutoKick extends Command
@@ -30,16 +31,18 @@ class AutoKick extends Command
 
     public function handle()
     {
-        $this->Game = new GameController;
-        $rooms = Room::get();
-        $this->info('Rooms: '.count($rooms));
         $now = date('Y-m-d H:i:s');
-        $time = time();
-        $this->info('Time now: '.$now);
+        $deadline = date('Y-m-d H:i:s', strtotime('-'.KICK_TIMEOUT.' seconds'));
+        // get rooms with recent activity
+        $recents = Action::select(DB::raw('DISTINCT room_id AS room_id'))->where('time', '>', $deadline)->pluck('room_id')->toArray();
+        $this->info('Rooms with activity: '.count($recents));
+        // get rooms not in recent activity and are public
+        $rooms = Room::whereNotIn('id', $recents)->whereNull('passcode')->get();
+        // dd(compact('now', 'deadline', 'recents', 'rooms'));
+        $this->info('Rooms without activity: '.count($rooms));
+        $this->Game = new GameController;
         foreach($rooms as $room) {
-            $latest_time = $room->actions()->whereIn('action', ['join', 'play', 'pass', 'deal'])->orderBy('time', 'desc')->first()->time;
-            $this->info('Room '.$room->id.' latest activity: '.$latest_time);
-            ($time - strtotime($latest_time) >  KICK_TIMEOUT) && $this->__checkKick($room);
+            $this->__checkKick($room);
         }
     }
 

@@ -55,7 +55,7 @@ class GameController extends Controller
         } else if(!empty($status['current'])) {
             $message = 'Waiting for '.User::find($status['current'])->name;
         }
-        return response()->json(['message' => 'You are spectating. '.$message] + $status, 200);
+        return response()->json(['message' => 'You are spectating. '.$message] + $status + $this->__getRoomSettings($room), 200);
     }
 
     public function play(Request $request) {
@@ -116,8 +116,8 @@ class GameController extends Controller
     }
 
     private function __listRooms() {
-        $rooms = Room::select('name')->orderBy('created_at', 'asc')->get()->toArray();
-        return response()->json(['message' => 'Listing all rooms', 'rooms' => $rooms] + $this->__blank, 200);
+        $rooms = Room::select('id', 'name', 'max_players', 'pot', 'passcode')->orderBy('created_at', 'asc')->get()->toArray();
+        return response()->json(['message' => 'Listing all rooms', 'rooms' => array_map(function($room) { $room['passcode'] = !empty($room['passcode']); return $room; }, $rooms)] + $this->__blank, 200);
     }
 
     private function __checkUserRoom($request = null) {
@@ -252,7 +252,16 @@ class GameController extends Controller
         } else if($status['current'] == $user->id) {
             $message = 'It is your turn!';
         }
-        return response()->json(compact('message') + $status + $this->__getUserStatus($status), 200);
+        
+        return response()->json(compact('message') + $status + $this->__getRoomSettings($room) + $this->__getUserStatus($status), 200);
+    }
+
+    private function __getRoomSettings($room) {
+        return ['settings' => [
+            'max_players'   => $room->max_players,
+            'pot_size'      => $room->pot,
+            'secured'       => !empty($room->passcode)
+        ]];
     }
 
     private function __getUserStatus($status) {
@@ -277,13 +286,28 @@ class GameController extends Controller
         return $out;
     }
 
+    public function create(Request $request) {
+        return $this->__createRoom([
+            'name'          => $request->name,
+            'passcode'      => $request->passcode,
+            'max_players'   => $request->max_players,
+            'pot'           => $request->pot
+        ]);
+    }
+
     private function __createRoom($settings = []) {
         $user = $this->__user ?: Auth::user();
         $created = !empty($settings);
         if(!empty($settings['name']) && Room::where('name', $settings['name'])->first()) {
             return response()->json(['message' => 'That Room name already exists: '.$settings['name']], 302);
         }
-        $settings += ['user_id' => $user->id, 'name' => ucwords(fake()->unique()->word).' '.Room::count()];
+        if(isset($settings['pot']) && (!is_numeric($settings['pot']) || $settings['pot'] < 1 || $settings['pot'] > 10)) {
+            return response()->json(['message' => 'Pot value should be from 1 to 10'], 302);
+        }
+        if(isset($settings['max_players']) && (!is_numeric($settings['max_players']) || $settings['max_players'] < 1 || $settings['max_players'] > 10)) {
+            return response()->json(['message' => 'Max players should be from 2 to 8'], 302);
+        }
+        $settings += ['user_id' => $user->id, 'name' => !isset($settings['name']) ? ucwords(fake()->unique()->word).' '.Room::count() : $settings['name']];
         // var_dump($settings);
         $this->__room = $room = Room::create($settings);
         Action::add('join', $room->id, ['user_id' => $user->id]);

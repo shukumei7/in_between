@@ -5,7 +5,8 @@ if(!defined('MIN_PASS_LENGTH')) {
     define('IDENTITY_LOCK_TIME', '48 hours');
     define('TOKEN_LENGTH', 15);
     define('STARTING_MONEY', 10);
-    define('DEFAULT_POT', 2);
+    define('DEFAULT_POT', 5);
+    define('MAX_POT', 10);
     define('RESTRICT_BET', 2);
     define('MAX_PLAYERS', 8);
     define('MAX_ROOM_BOTS', 4);

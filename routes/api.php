@@ -21,7 +21,8 @@ use App\Http\Controllers\RoomController;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-
+Route::get('/settings', [UserController::class, 'settings']);
+Route::get('/accounts/{type}/{name}', [UserController::class, 'check']);
 Route::post('/accounts', [UserController::class, 'register']);
 Route::get('/games/{id}', [GameController::class, 'spectate']);
 Route::middleware('auth:sanctum')->put('/accounts/{id}', [UserController::class, 'update']);
@@ -30,4 +31,6 @@ Route::middleware('auth:sanctum')->delete('/accounts', [UserController::class, '
 Route::middleware('auth:sanctum')->get('/games', [GameController::class, 'status']);
 Route::middleware('auth:sanctum')->post('/games', [GameController::class, 'play']);
 Route::middleware('auth:sanctum')->post('/games/{id}', [GameController::class, 'join']);
+Route::middleware('auth:sanctum')->get('/rooms/{name}', [RoomController::class, 'check']);
+Route::middleware('auth:sanctum')->post('/rooms', [GameController::class, 'create']);
 Route::middleware('auth:sanctum')->put('/rooms/{id}', [RoomController::class, 'update']);

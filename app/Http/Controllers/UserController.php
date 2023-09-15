@@ -13,9 +13,23 @@ use Illuminate\Support\Str;
 class UserController extends Controller
 {
     
+    public function check($type, $name) {
+        if(!in_array($type, ['name', 'email'])) {
+            return response()->json(['message' => 'Invalid entry', 'available' => false], 302);
+        }
+        if(empty(User::where($type, $name)->first())) {
+            return response()->json(['message' => 'Your '.$type.' is available', 'available' => true]);
+        }
+        return response()->json(['message' => 'Your '.$type.' is NOT available', 'available' => false]);
+    }
+
     public function register(Request $request) {
         if(!empty($request->id)) {
             return $this->__quickLogin($request);
+        }
+        if(!empty($request->password) && !empty($request->email) && !empty($request->name)) {
+            // register complete user
+            return $this->__registerUser($request->name, $request->email, $request->password);
         }
         if(!empty($request->password)) {
             return $this->__slowLogin($request);
@@ -24,6 +38,54 @@ class UserController extends Controller
             return $this->__registerNamedGuest($request->name);
         }
         return $this->__registerGuest(); 
+    }
+
+    private function __checkEmail($email) {
+        if(!preg_match('/^([a-z0-9][a-z0-9\.\-\_]*)\@([a-z][a-z0-9]+)\.[a-z]{2,4}$/i', $email)) {
+            return response()->json(['message' => 'You have an invalid email address'], 302);
+        }
+        if(!empty(User::where('email', $email)->get()->value('id'))) {
+            return response()->json(['message' => 'That email is already registered'], 200);
+        }
+        return true;
+    }
+
+    private function __checkName($name) {
+        if(strlen($name) < 3) {
+            return response()->json(['message' => 'Your name needs to be at least 3 characters long'], 302);
+        }
+        if(!empty(User::where('name', $name)->first())) {
+            return response()->json(['message' => 'That name is taken'], 302);
+        }
+        return true;
+    }
+
+    private function __checkPassword($password) {
+        if(!preg_match('/^[a-zA-Z0-9\!\@\#\$\%\^\&\*\,\.\?\;\:\\-\_\=\+\~]{8,}$/', $password)) {
+            return response()->json(['message' => 'Your password needs to be at least 8 characaters; with a capital letter, small letter, number, and special character'], 302);
+        }
+        return true;
+    }
+
+    private function __registerUser($name, $email, $password) {
+        if(true !== $return = $this->__checkName($name = trim($name))) {
+            return $return;
+        }
+        if(true !== $return = $this->__checkEmail($email)) {
+            return $return;
+        }
+        if(true !== $return = $this->__checkPassword($password)) {
+            return $return;
+        }
+        $user = new User;
+        $user->name = $name;
+        $user->email = $email;
+        $user->password = $password;
+        $user->remember_token = Str::random(TOKEN_LENGTH);
+        $user->save();
+        Auth::login($user);
+        return $this->__returnLogin('New user registered!');
+        // return $this->__returnNewUser($user->id, $user->name, $user->remember_token, $user->createToken('IB')->plainTextToken);
     }
 
     private function __registerGuest() {
@@ -38,8 +100,8 @@ class UserController extends Controller
     }
 
     private function __registerNamedGuest($name) {
-        if(!empty(User::where('name', $name)->first())) {
-            return response()->json(['message' => 'That name is taken'], 200);
+        if(true !== $return = $this->__checkName($name = trim($name))) {
+            return $return;
         }
         $user = new User;
         $user->name = $name;
@@ -117,13 +179,13 @@ class UserController extends Controller
     }
 
     private function __updateUserName($request, $user) {
-        if(!empty(User::where('name', $request->name)->get()->value('id'))) {
-            return response()->json(['message' => 'That name is taken'], 200);
+        if(true !== $return = $this->__checkName($name = trim($request->name))) {
+            return $return;
         }
         if(true !== $return = $this->__checkIdentityUpdate($user, 'name')) {
             return $return;
         }
-        $user->name = $request->name;
+        $user->name = $name;
         $user->identity_updated_at = now();
         $user->save();
         return response()->json(['message' => 'Your name is updated and you must wait at least '.IDENTITY_LOCK_TIME.' before changing it again'], 202);
@@ -137,8 +199,8 @@ class UserController extends Controller
     }
 
     private function __updateUserEmail($request, $user) {
-        if(!empty(User::where('email', $request->email)->get()->value('id'))) {
-            return response()->json(['message' => 'That email is already registered'], 200);
+        if(true !== $return = $this->__checkEmail($request->email)) {
+            return $return;
         }
         if(empty($user->email)) {
             return $this->__addUserEmail($request, $user);
@@ -156,6 +218,9 @@ class UserController extends Controller
     private function __checkNewPassword($request) {
         if(empty($request->create_password) || empty($request->confirm_password)) {
             return response()->json(['message' => 'You need a password to secure this account'], 406);    
+        }
+        if(true !== $this->__checkPassword($request->create_password)) {
+            return $return;
         }
         if(strlen($request->create_password) < MIN_PASS_LENGTH) {
             return response()->json(['message' => 'Your password needs to be at least '.MIN_PASS_LENGTH.' characters long'], 406);
@@ -208,5 +273,15 @@ class UserController extends Controller
             'points'            => $user->getPoints(),
             'current_room_id'   => $user->getRoomID()
         ], 200);
+    }
+
+    public function settings() {
+        return response()->json([
+            'restrict_bet'  => RESTRICT_BET,
+            'timeout'       => KICK_TIMEOUT,
+            'default_pot'   => DEFAULT_POT,
+            'max_pot'       => MAX_POT,
+            'max_players'   => MAX_PLAYERS
+        ]);
     }
 }
