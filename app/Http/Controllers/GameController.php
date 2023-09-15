@@ -100,7 +100,7 @@ class GameController extends Controller
         if(empty($id) || empty($room = Room::find($id))) {
             return response()->json(['message' => 'Room ID not found'], 302);
         }
-        return $this->joinRoom($user, $room, !empty($request->passcode) ? $request->passcode : null);
+        return $this->joinRoom($user, $room, !empty(request()->passcode) ? request()->passcode : null);
     }
 
     private function __returnAlreadyInRoom($room_id) {
@@ -116,7 +116,7 @@ class GameController extends Controller
     }
 
     private function __listRooms() {
-        $rooms = Room::select('id', 'name', 'max_players', 'pot', 'passcode')->orderBy('created_at', 'asc')->get()->toArray();
+        $rooms = Room::select('id', 'name')->orderBy('created_at', 'asc')->get()->toArray();
         return response()->json(['message' => 'Listing all rooms', 'rooms' => array_map(function($room) { $room['passcode'] = !empty($room['passcode']); return $room; }, $rooms)] + $this->__blank, 200);
     }
 

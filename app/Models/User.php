@@ -122,7 +122,7 @@ class User extends Authenticatable
             return ['action' => 'pass'];
         }
         if($chance < $scheme[1]) {
-            return ['action' => 'play', 'bet' => min($status['pot'], RESTRICT_BET)];
+            return ['action' => 'play', 'bet' => min($status['pot'], 2)];
         }
         $points = !empty($status['points']) && $status['user_id'] == $this->id? $status['points'] : $this->getPoints();
         if($chance < $scheme[2]) {
