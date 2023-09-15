@@ -13,6 +13,7 @@ class GameController extends Controller
 
     private $__user = null;
     private $__room = null;
+    private $__playedCard = null;
     private $__status = [];
     private $__blank = [
         'room_id'   => 0,
@@ -255,17 +256,22 @@ class GameController extends Controller
     }
 
     private function __getUserStatus($status) {
-        if(empty($user = $this->__user ?: Auth::user()) || $status['room_id'] != $user->getRoomID()) {
+        if(empty($user = $this->__user ?: Auth::user())) {
             return [];
         }
-        $room = $this->__room;
         $out = [
             'user_id'   => $user->id,
-            'points'    => isset($status['scores'][$user->id]) ? $status['scores'][$user->id] : $user->getPoints()
+            'points'    => $user->getPoints(true)
         ];
+        if($this->__playedCard) {
+            $out['card'] = $this->__playedCard;
+        }
+        if(empty($status['room_id']) || $status['room_id'] != $user->getRoomID() || empty($room = $this->__room ?: Room::find($status['room_id']))) {
+            return $out;
+        }
         if(in_array($user->id, $status['playing'])) {
             $out += [
-                'hand'      => $room->getHand($user->id)
+                'hand'  => $room->getHand($user->id)
             ];
         };
         return $out;
@@ -305,7 +311,7 @@ class GameController extends Controller
         if($room->pot > 0 && $points < 1 && $bet > RESTRICT_BET) {
             return response()->json(['message' => 'You can only bet a max of '.number_format(RESTRICT_BET).' if your points are less than 1', 'points' => $points], 302);
         }
-        $card = $this->playHand($user, $bet);
+        $this->__playedCard = $card = $this->playHand($user, $bet);
         $hand []= $card;
         $output = ['message' => 'You '.($bet > 0? 'win' : 'lose').' '.number_format($b = abs($bet)).' point'.($b == 1? '' : 's')] + ['cards' => $hand, 'points' => $user->getPoints(true)];
         return $this->checkEndRound($output, $status, true);
@@ -395,6 +401,6 @@ class GameController extends Controller
         if(($is_dealer && $is_turn) || (count($status['playing']) <= 1 && count($status['players']) > 1)) {
             $this->__cleanupRound(['message' => ''], $status); // , count($status['playing']) > 2);
         }
-        return response()->json(['message' => 'You left the room'] + $this->__blank, 200);
+        return response()->json(['message' => 'You left the room'] + $this->__blank + $this->__getUserStatus($this->__blank), 200);
     }
 }

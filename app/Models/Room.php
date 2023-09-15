@@ -83,20 +83,21 @@ class Room extends Model
         $active = count($this->__players) > 1;
         $playing = $this->__getPlaying();
         $users = User::whereIn('id', $playing)->get();
-        $names = User::whereIn('id', Action::whereNotNull('user_id')->pluck('user_id')->toArray())->pluck('name', 'id')->toArray();
+        $names = User::whereIn('id', Action::select(DB::raw('DISTINCT user_id as user_id'))->whereNotNull('user_id')->pluck('user_id')->toArray())->pluck('name', 'id')->toArray();
+        $hands = array_map(function($a) { return count($a); }, $this->__hands);
         $this->__status = [
             'activities'    => array_map(function($event) use ($names) { if($event['user_id']) $event['name'] = $names[$event['user_id']]; return $event; }, $this->__activities),
             'room_id'       => $this->id,
             'room_name'     => $this->name,
             'deck'          => 52 - count($this->__dealt),
             'discards'      => $this->__discards,
-            'hidden'        => count($this->__dealt) - count($this->__discards),
+            'hidden'        => count($this->__dealt) - count($this->__discards) - array_sum($hands),
             'pot'           => $this->__pot,
             'players'       => array_replace(array_flip($this->__players), User::whereIn('id', $this->__players)->pluck('name', 'id')->toArray()),
             'playing'       => $playing,
             'dealer'        => $active && !empty($playing[$this->__dealer]) ? $playing[$this->__dealer] : 0,
             'current'       => $active && !empty($playing[$this->__turn]) ? $playing[$this->__turn] : 0,
-            'hands'         => array_map(function($a) { return count($a); }, $this->__hands),
+            'hands'         => $hands,
             'scores'        => $this->__scores
         ];
         if(env('APP_ENV') == 'testing') {
@@ -118,15 +119,6 @@ class Room extends Model
     public function getRemainingHands() {
         return array_filter($this->__hands);
     }
-
-    /*
-    public function playHand($user_id) {
-        $dealt = Action::select('card')->where('room_id', $room->id)->where('user_id', $user_id)->where('action', 'deal')->orderBy('time', 'desc')->get()->toArray();
-        dd($dealt);
-        $card = $this->dealCard();
-        return $card > min($dealt) && $card < max($dealt);
-    }
-    */
 
     public function dealCard() {
         do {
@@ -335,7 +327,8 @@ class Room extends Model
         $this->__discards []= $card;
         $this->__discards []= min($this->__hands[$user_id]);
         $this->__discards []= max($this->__hands[$user_id]);
-        $this->__hands[$user_id] []= $card; // keep hand for self reference
+        //$this->__hands[$user_id] []= $card; // keep hand for self reference
+        $this->__hands[$user_id] = []; // empty hand
         $this->__nextPlayer();
     }
 }
