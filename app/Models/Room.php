@@ -325,8 +325,14 @@ class Room extends Model
         $this->__scores[$user_id] += $bet;
         $this->__dealt []= $card;
         $this->__discards []= $card;
-        $this->__discards []= min($this->__hands[$user_id]);
-        $this->__discards []= max($this->__hands[$user_id]);
+        if(empty($this->__hands[$user_id])) {
+            // error and shouldn't happen
+            $this->__nextPlayer();
+            return;
+        }
+        $hand = $this->__hands[$user_id];
+        $this->__discards []= min($hand);
+        $this->__discards []= max($hand);
         //$this->__hands[$user_id] []= $card; // keep hand for self reference
         $this->__hands[$user_id] = []; // empty hand
         $this->__nextPlayer();

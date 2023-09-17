@@ -109,7 +109,9 @@ class User extends Authenticatable
         $min = min($hand);
         $max = max($hand);
         $win = $max - $min - (floor($max/10) - floor($min/10)) * 6; // get cards to draw inside
-        $deck = $status['deck'];
+        if(empty($deck = $status['deck'])) {
+            return [ 'action' => 'leave' ]; // leave dead room
+        }
         $discards = $status['discards'];
         foreach($discards as $discard) {
             if($discard > $min && $discard < $max) {

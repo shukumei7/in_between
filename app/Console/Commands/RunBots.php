@@ -83,6 +83,10 @@ class RunBots extends Command
             case 'play':
                 $this->__playMove($bot, $move['bet'], $status);       
                 return;
+            case 'leave':
+                Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
+                $this->info('Bot '.$bot->id.' left');
+                return;
         }
     }
 
