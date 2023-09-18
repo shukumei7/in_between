@@ -53,7 +53,8 @@ class AutoKick extends Command
             return; // room is inactive
         }
         // auto pass instead of kick
-        Action::add('pass', $room->id, ['user_id' => $status['current']]);
+        // Action::add('pass', $room->id, ['user_id' => $status['current']]);
+        $this->Game->passHand($status['current']);
         $this->info('Auto-Pass User '.$status['current'].' on Room '.$room->id);
         // $this->Game->leaveRoom($user = User::find($status['current']), true);
         

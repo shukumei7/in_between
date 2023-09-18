@@ -61,8 +61,11 @@ class UserController extends Controller
     }
 
     private function __checkPassword($password) {
-        if(!preg_match('/^[a-zA-Z0-9\!\@\#\$\%\^\&\*\,\.\?\;\:\\-\_\=\+\~]{8,}$/', $password)) {
-            return response()->json(['message' => 'Your password needs to be at least 8 characaters; with a capital letter, small letter, number, and special character'], 302);
+        if(strlen($password) < MIN_PASS_LENGTH) {
+            return response()->json(['message' => 'Your password needs to be at least '.MIN_PASS_LENGTH.' characters long'], 406);
+        }
+        if(!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password) || !preg_match('/[\!\@\#\$\%\^\&\*\(\)\.\?\_\-]/', $password)) {
+            return response()->json(['message' => 'Your password needs to have a upper-case letter, a lower-case case letter, a number, and at least one of the following symbols (!, @, #, $, %, ^, &, *, (, ), -, _, ., ?)'], 406);
         }
         return true;
     }
@@ -219,15 +222,10 @@ class UserController extends Controller
         if(empty($request->create_password) || empty($request->confirm_password)) {
             return response()->json(['message' => 'You need a password to secure this account'], 406);    
         }
-        if(true !== $this->__checkPassword($request->create_password)) {
+        if(true !== $return = $this->__checkPassword($request->create_password)) {
             return $return;
         }
-        if(strlen($request->create_password) < MIN_PASS_LENGTH) {
-            return response()->json(['message' => 'Your password needs to be at least '.MIN_PASS_LENGTH.' characters long'], 406);
-        }
-        if(!preg_match('/[A-Z]/', $request->create_password) || !preg_match('/[a-z]/', $request->create_password) || !preg_match('/[0-9]/', $request->create_password) || !preg_match('/[\!\@\#\$\%\^\&\*\(\)\.\?\_\-]/', $request->create_password)) {
-            return response()->json(['message' => 'Your password needs to have a upper-case letter, a lower-case case letter, a number, and at least one of the following symbols (!, @, #, $, %, ^, &, *, (, ), -, _, ., ?)'], 406);
-        }
+        
         if($request->create_password != $request->confirm_password) {
             return response()->json(['message' => 'Your passwords do not match'], 406);
         }

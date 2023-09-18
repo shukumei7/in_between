@@ -212,6 +212,9 @@ class GameController extends Controller
     private function __getPots($room, $players) {
         // dump('Add pot');
         foreach($players as $user_id) {
+            if(!$user_id) {
+                dd(compact('players', 'user_id'));
+            }
             Action::add('pot', $room->id, ['user_id' => $user_id, 'bet' => -1 * $room->pot]);
         }
         $this->__room = $room;
@@ -361,6 +364,12 @@ class GameController extends Controller
             $this->__getPots($room, $status['playing']); // make playing pay
         }
         return $card;
+    }
+
+    public function passHand($user_id) {
+        $this->__user = $user = User::find($user_id);
+        $this->__room = Room::find($user->getRoomID());
+        return $this->__passHand();
     }
 
     private function __passHand() {

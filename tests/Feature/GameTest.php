@@ -29,7 +29,7 @@ class GameTest extends TestCase
     }
 
     private function __checkResponseMessage($response, $message, $code = 200) {
-        return $this->_checkResponseMessage($response, $message, $code);
+        return $this->assertResponse($response, 'message', $message, $code);
     }
 
     private function __addUser($user_id) {
@@ -161,14 +161,21 @@ class GameTest extends TestCase
 
     public function test_trying_to_play_with_bet_above_money(): void
     {
+        // add pot money
+        $room = Room::find(1);
+        $status = $room->analyze(true);
+        $dummy = Action::add('pot', 1, ['user_id' => 1, 'bet' => -1 * RESTRICT_BET]);
+        $status = $room->analyze(true);
+        $this->assertResponse($status, 'pot', 4 + RESTRICT_BET, 0);
         // remove starting money
         $user = User::find(2);
         $action = Action::add('pot', $room_id = Room::factory()->create(['user_id' => 2])->id, ['user_id' => 2, 'bet' => -1 * STARTING_MONEY]);
-        $this->assertTrue($user->getPoints() == -2);
-        $response = $this->actingAs($user)->post('/api/games', ['action' => 'play', 'bet' => 4]);
-        $this->__checkResponseMessage($response, 'You can only bet a max of '.number_format(RESTRICT_BET).' if your points are less than 1', 302);
+        $this->assertCase($user->getPoints() == -2, $user);
+        $response = $this->actingAs($user)->post('/api/games', ['action' => 'play', 'bet' => RESTRICT_BET + 1]);
+        $this->assertResponse($response, 'message', 'You can only bet a max of '.number_format(RESTRICT_BET).' if your points are less than 1', 302);
         $this->assertTrue($response['points'] == -2);
         $action->delete();
+        $dummy->delete();
         Room::find($room_id)->delete();
     }
 
@@ -356,7 +363,8 @@ class GameTest extends TestCase
         $response = $this->actingAs($user = User::find(4))->post('/api/games', ['action' => 'leave']);
         $this->assertResponse($response, 'room_id', 0);
         $this->assertResponse($response, 'message', 'You left the room');
-        $this->assertCase(0 == $user->getRoomID(true), $response);
+        $this->assertEquals(4, $user->id);
+        $this->assertEquals(0, $user->getRoomID(true));
         $response = $this->get('/api/games/1');
         $this->assertCase($response['dealer'] == 2, $response);
         $this->assertCase($response['current'] == 3, $response);

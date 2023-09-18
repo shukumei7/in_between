@@ -140,6 +140,35 @@ class Room extends Model
             $this->__analyzeAction($event);
             $this->__formatEvent($event);
         }
+        /*
+        if(count($this->__getPlaying()) > 1 && empty($this->__hands[$this->__players[$this->__turn]])) {
+            $this->__resetRoom();
+        }
+        */
+        return true;
+    }
+
+    private function __resetRoom() {
+        // error, current player has no hands, reset game
+        $new_actions= [];
+        if($new_players = array_diff($this->__players, $this->__getPlaying())) {
+            foreach($new_players as $user_id) { // add pots
+                $new_actions []= Action::add('pot', $this->id, ['user_id' => $user_id, 'bet' => $pot = -1 * $this->pot]);
+                $this->__getPot($user_id, $pot);
+            }
+        }
+        $new_actions []= Action::add('shuffle', $this->id);
+        $new_actions []= Action::add('rotate', $this->id);
+        $playing = $this->__getPlaying();
+        $this->__resetDeck();
+        $this->__shuffleDeck();
+        $this->__nextDealer();
+        for($x = 0 ; $x < 2; $x++) {
+            foreach($playing as $user_id) {
+                $new_actions []= Action::add('deal', $this->id, ['user_id' => $user_id, 'card' => $card = $this->dealCard()]);
+                $this->__dealCard($user_id, $card);
+            }
+        }
         return true;
     }
 
@@ -265,7 +294,8 @@ class Room extends Model
             $activities = $this->__activities;
             $players = $this->__players;
             $scores = $this->__scores;
-            dd(compact('activities', 'players', 'scores', 'user_id'));
+            $trace = array_map(function($a) { return $a; }, array_slice(debug_backtrace(), 0, 2));
+            dd(compact('activities', 'players', 'scores', 'user_id', 'trace'));
         }
         $this->__scores[$user_id] += $bet;
     }

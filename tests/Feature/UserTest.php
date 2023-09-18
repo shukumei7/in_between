@@ -16,7 +16,7 @@ class UserTest extends TestCase
         $before = User::count();
         $response = $this->post('/api/accounts');
         $after = User::count();
-        $response->assertStatus(201);
+        $response->assertStatus(202);
         $this->assertTrue($response['message'] == 'New user created!');
         $this->assertTrue($before + 1 == $after);
         $user = User::latest('id')->first();
@@ -27,7 +27,7 @@ class UserTest extends TestCase
     public function test_register_name(): void
     {
         $response = $this->post('/api/accounts', $data = ['name' => fake()->name()]);
-        $response->assertStatus(201);
+        $response->assertStatus(202);
         $this->assertTrue($response['message'] == 'New user created!');
         $this->assertTrue(!empty($response['user_id']));
         $user = User::latest('id')->first();
@@ -40,7 +40,7 @@ class UserTest extends TestCase
     {
         $user = User::factory()->create();
         $response = $this->post('/api/accounts', $data = ['name' => $user->name]);
-        $response->assertStatus(200);
+        $response->assertStatus(302);
         $this->assertTrue($response['message'] == 'That name is taken');
     }
 
@@ -115,17 +115,13 @@ class UserTest extends TestCase
         $response->assertStatus(406);
         $this->assertTrue($response['message'] == $message);
         $response = $this->actingAs($user)->put($url, $data + ['create_password' => 'pass', 'confirm_password' => 'pass']);
-        $response->assertStatus(406);
-        $this->assertTrue($response['message'] == 'Your password needs to be at least '.MIN_PASS_LENGTH.' characters long');
+        $this->assertResponse($response, 'message', 'Your password needs to be at least '.MIN_PASS_LENGTH.' characters long', 406);
         $response = $this->actingAs($user)->put($url, $data + ['create_password' => 'passwqwer', 'confirm_password' => 'passwqwer']);
-        $response->assertStatus(406);
-        $this->assertTrue($response['message'] == $message = 'Your password needs to have a upper-case letter, a lower-case case letter, a number, and at least one of the following symbols (!, @, #, $, %, ^, &, *, (, ), -, _, ., ?)');
+        $this->assertResponse($response, 'message', $message = 'Your password needs to have a upper-case letter, a lower-case case letter, a number, and at least one of the following symbols (!, @, #, $, %, ^, &, *, (, ), -, _, ., ?)', 406);
         $response = $this->actingAs($user)->put($url, $data + ['create_password' => 'PASS5123', 'confirm_password' => 'PASS5123']);
-        $response->assertStatus(406);
-        $this->assertTrue($response['message'] == $message);
+        $this->assertResponse($response, 'message', $message, 406);
         $response = $this->actingAs($user)->put($url, $data + ['create_password' => 'PaSS5123', 'confirm_password' => 'PaSS5123']);
-        $response->assertStatus(406);
-        $this->assertTrue($response['message'] == $message);
+        $this->assertResponse($response, 'message', $message, 406);
         $response = $this->actingAs($user)->put($url, $data + ['create_password' => 'PaSS5!123', 'confirm_password' => 'PaSS5?123']);
         $response->assertStatus(406);
         $this->assertTrue($response['message'] == 'Your passwords do not match');
