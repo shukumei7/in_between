@@ -93,7 +93,8 @@ class BotTest extends TestCase
         $this->assertTrue($output[5] == 'Added Bot 7');
         $this->__testPlaying($output[6], 6);
     }
-    public function test_play_in_inactive_room(): void {
+    public function test_play_in_inactive_room(): void 
+    {
         $room = Room::find(1);
         $status = $room->analyze();
         $Game = new GameController;
@@ -112,7 +113,8 @@ class BotTest extends TestCase
         $this->assertTrue($output[5] == 'Added Bot 2');
         $this->__testPlaying($output[6], 5);
     }
-    public function test_play_back_to_normal(): void {
+    public function test_play_back_to_normal(): void 
+    {
         $this->withoutMockingConsoleOutput()->artisan('bots:run');
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 7');
@@ -122,6 +124,20 @@ class BotTest extends TestCase
         $this->__testPlaying($output[4], 1);
         $this->assertTrue($output[5] == 'Room 2: [5,6d,7c,2x]');
         $this->__testPlaying($output[6], 7);
+    }
+
+    public function test_auto_pass(): void
+    {
+        $room = Room::find(1);
+        $status = $room->analyze();
+        $this->assertResponse($status, 'dealer', 4, 0);
+        $this->assertResponse($status, 'current', 4, 0);
+        $response = json_decode((new GameController)->passHand($status['current'])->content(), true);
+        $this->assertResponse($response, 'message', 'You passed. New round started!', 0);
+        $this->assertResponse($response, 'playing', [4,1,3], 0);
+        $this->assertResponse($response, 'dealer', 1, 0);
+        $this->assertResponse($response, 'current', 3, 0);
+        $this->assertCase(array_filter($response['hands']) == $response['hands'], $response);
     }
 
     public function test_continuous_play(): void
