@@ -32,9 +32,9 @@ class AutoKick extends Command
     public function handle()
     {
         $now = date('Y-m-d H:i:s');
-        $deadline = date('Y-m-d H:i:s', strtotime('-'.KICK_TIMEOUT.' seconds'));
+        $deadline = date('Y-m-d H:i:s', strtotime('-'.PASS_TIMEOUT.' seconds'));
         // get rooms with recent activity
-        $recents = Action::select(DB::raw('DISTINCT room_id AS room_id'))->where('time', '>', $deadline)->pluck('room_id')->toArray();
+        $recents = Action::select(DB::raw('DISTINCT room_id AS room_id'))->whereNotIn('action', ['join', 'leave', 'kick'])->where('time', '>', $deadline)->pluck('room_id')->toArray();
         $this->info('Rooms with activity: '.count($recents));
         // get rooms not in recent activity and are public
         $rooms = Room::whereNotIn('id', $recents)->whereNull('passcode')->get();
@@ -56,7 +56,18 @@ class AutoKick extends Command
         // Action::add('pass', $room->id, ['user_id' => $status['current']]);
         $this->Game->passHand($status['current']);
         $this->info('Auto-Pass User '.$status['current'].' on Room '.$room->id);
-        // $this->Game->leaveRoom($user = User::find($status['current']), true);
+        $user = User::find($user_id = $status['current']);
+        $actions = $user->actions()->select('action')->whereIn('action', ['timeout' , 'pass', 'play'])->orderBy('id', 'desc')->limit(PASS_KICK)->pluck('action');
+        // dump(compact('user_id', 'actions'));
+        // get last 3 actions, check if all are timeout
+        foreach($actions as $action) {
+            if($action != 'timeout') {
+                return;
+            }
+        }
+        $this->Game->leaveRoom($user, true);
+        $this->info('Auto-Kick User '.$status['current'].' from Room '.$room->id);
+        
         
     }
 

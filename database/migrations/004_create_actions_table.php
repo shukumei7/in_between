@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('room_id')->constrained();
             $table->foreignId('user_id')->nullable();
-            $table->enum('action', ['shuffle', 'join', 'leave', 'rotate', 'pot', 'play', 'pass', 'deal', 'kick']);
+            $table->enum('action', ['shuffle', 'join', 'leave', 'rotate', 'pot', 'play', 'pass', 'deal', 'timeout', 'kick']);
             $table->integer('bet')->nullable();
             $table->integer('card')->nullable()->unsigned();
             $table->timestamp('time')->useCurrent();

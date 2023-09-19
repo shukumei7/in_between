@@ -276,7 +276,8 @@ class UserController extends Controller
     public function settings() {
         return response()->json([
             'restrict_bet'  => RESTRICT_BET,
-            'timeout'       => KICK_TIMEOUT,
+            'timeout'       => PASS_TIMEOUT,
+            'kick'          => PASS_KICK,
             'default_pot'   => DEFAULT_POT,
             'max_pot'       => MAX_POT,
             'max_players'   => MAX_PLAYERS

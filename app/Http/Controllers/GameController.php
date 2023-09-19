@@ -370,11 +370,11 @@ class GameController extends Controller
         $this->__user = $user = User::find($user_id);
         $this->__room = $room = Room::find($user->getRoomID());
         $this->__status = $room->analyze();
-        return $this->__passHand();
+        return $this->__passHand('timeout');
     }
 
-    private function __passHand() {
-        $action = Action::add('pass', $this->__room->id, [ 'user_id' => $this->__user->id]);
+    private function __passHand($action = 'pass') {
+        Action::add($action, $this->__room->id, [ 'user_id' => $this->__user->id]);
         $output = ['message' => 'You passed'];
         return $this->checkEndRound($output, $this->__status, true);
     }

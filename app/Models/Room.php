@@ -217,6 +217,7 @@ class Room extends Model
             case 'shuffle':
                 return $this->__shuffleDeck();
             case 'pass':
+            case 'timeout':
                 $this->__hands[$user_id] = [];
                 return $this->__nextPlayer();
             case 'rotate':
