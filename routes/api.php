@@ -22,6 +22,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 Route::get('/settings', [UserController::class, 'settings']);
+Route::post('/terms', [UserController::class, 'accept']);
 Route::get('/accounts/{type}/{name}', [UserController::class, 'check']);
 Route::post('/accounts', [UserController::class, 'register']);
 Route::get('/games/{id}', [GameController::class, 'spectate']);
