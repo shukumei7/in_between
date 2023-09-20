@@ -48,11 +48,11 @@ class AutoKick extends Command
 
     private function __checkKick($room) {
         $status = $room->analyze();
-        if($status['current'] == 0 || count($status['players']) < 2) {
+        if($status['current'] == 0 || count($status['players']) < 2 || count($status['playing']) < 2) {
             $this->info('Room '.$room->id.' is inactive');
             return; // room is inactive
         }
-        // auto pass instead of kick
+        // auto pass
         // Action::add('pass', $room->id, ['user_id' => $status['current']]);
         $this->Game->passHand($status['current']);
         $this->info('Auto-Pass User '.$status['current'].' on Room '.$room->id);
@@ -60,6 +60,9 @@ class AutoKick extends Command
         $actions = $user->actions()->select('action')->whereIn('action', ['timeout' , 'pass', 'play'])->orderBy('id', 'desc')->limit(PASS_KICK)->pluck('action');
         // dump(compact('user_id', 'actions'));
         // get last 3 actions, check if all are timeout
+        if(count($actions) < PASS_KICK) {
+            return; // no need to kick yet
+        }
         foreach($actions as $action) {
             if($action != 'timeout') {
                 return;
