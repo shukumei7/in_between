@@ -70,7 +70,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'EDT', // UTC',
 
     /*
     |--------------------------------------------------------------------------
@@ -122,7 +122,7 @@ return [
     |
     */
 
-    'key' => env('APP_KEY'),
+    'key' => '1234t34t3g3vg45v45yr32r23t34t35y54dt234t4t3g45hg', // env('APP_KEY'),
 
     'cipher' => 'AES-256-CBC',
 
