@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
 use App\Models\User;
+use App\Models\Consent;
 
 class UserTest extends TestCase
 {
@@ -244,9 +245,18 @@ class UserTest extends TestCase
         $this->assertTrue($response['message'] == 'You have updated your password');
     }
 
-    public function test_view_user() : void {
+    public function test_view_user() : void 
+    {
         $user = User::factory()->create();
         $response = $this->actingAs($user)->get('/api/accounts/'.$user->id);
         $response->assertOk();
+    }
+
+    public function test_sign_consent() : void
+    {
+        $response = $this->post('/api/terms', [ 'ip_address' => 'test']);
+        $response->assertOk();
+        $this->assertEquals('test', Consent::first()->ip_address);
+
     }
 }

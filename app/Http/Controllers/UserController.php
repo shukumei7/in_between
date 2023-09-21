@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 
 use App\Models\User;
 use App\Models\Room;
+use App\Models\Consent;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -275,12 +276,22 @@ class UserController extends Controller
 
     public function settings() {
         return response()->json([
-            'restrict_bet'  => RESTRICT_BET,
-            'timeout'       => PASS_TIMEOUT,
-            'kick'          => PASS_KICK,
-            'default_pot'   => DEFAULT_POT,
-            'max_pot'       => MAX_POT,
-            'max_players'   => MAX_PLAYERS
+            'server_timezone'   => config('app.timezone'),
+            'restrict_bet'      => RESTRICT_BET,
+            'timeout'           => PASS_TIMEOUT,
+            'kick'              => PASS_KICK,
+            'default_pot'       => DEFAULT_POT,
+            'max_pot'           => MAX_POT,
+            'max_players'       => MAX_PLAYERS
+        ]);
+    }
+
+    public function accept(Request $request) {
+        if(!empty($request->ip_address)) {
+            Consent::create(['ip_address' => $request->ip_address])->save();
+        }
+        return response()->json([
+            'message' => 'Thank you for your cooperation!'
         ]);
     }
 }
