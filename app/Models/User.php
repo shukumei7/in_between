@@ -100,11 +100,11 @@ class User extends Authenticatable
     }
 
     public function decideMove($status) {
-        if(empty($hand = $status['hand'])) {
-            return false;
-        }
         if(!isset($this->__bot_schemes[$this->remember_token])) {
             $this->activateBot();
+        }
+        if(empty($hand = $status['hand'])) {
+            return [ 'action' => 'pass' ]; // pass on error
         }
         $min = min($hand);
         $max = max($hand);
