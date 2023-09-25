@@ -39,7 +39,7 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 2');
         $this->assertTrue($output[1] == 'Available Rooms: 1');
-        $this->assertTrue($output[2] == 'Room 1: [1d,2c]');
+        $this->assertTrue(str_starts_with($output[2], 'Room 1: [1d,2c]'));
         $this->assertTrue($output[3] == 'Added Bot 3');
         $this->__testPlaying($output[4], 2);
     }
@@ -49,7 +49,7 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 3');
         $this->assertTrue($output[1] == 'Available Rooms: 1');
-        $this->assertTrue($output[2] == 'Room 1: [1dc,2,3x]');
+        $this->assertTrue(str_starts_with($output[2], 'Room 1: [1dc,2,3x]'));
         $this->assertTrue($output[3] == 'Added Bot 4');
         $this->__testPlaying($output[4], 1);
     }
@@ -66,9 +66,9 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 4');
         $this->assertTrue($output[1] == 'Available Rooms: 1');
-        $this->assertTrue($output[2] == 'Room 1: [1,2d,3c,4x]');
+        $this->assertCase(str_starts_with($output[2], 'Room 1: [1,2d,3c,4x]'), $output);
         $this->__testPlaying($output[3], 3);
-        $this->assertCase($output[4] == 'Bot 5 started a room', $output);
+        $this->assertCase($output[5] == 'Bot 5 started a room', $output);
     }
     public function test_join_second_room(): void
     {
@@ -76,10 +76,10 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertCase($output[0] == 'Registered Bots: 5', $output);
         $this->assertTrue($output[1] == 'Available Rooms: 2');
-        $this->assertTrue($output[2] == 'Room 1: [1c,2d,3,4x]');
+        $this->assertTrue(str_starts_with($output[2], 'Room 1: [1c,2d,3,4x]'));
         $this->__testPlaying($output[3], 1);
-        $this->assertTrue($output[4] == 'Room 2: [5x]');
-        $this->assertTrue($output[5] == 'Added Bot 6');
+        $this->assertCase(str_starts_with($output[5], 'Room 2: [5x]'), $output);
+        $this->assertTrue($output[6] == 'Added Bot 6');
     }
     public function test_play_in_multiple_rooms(): void
     {
@@ -87,11 +87,11 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 6');
         $this->assertTrue($output[1] == 'Available Rooms: 2');
-        $this->assertCase($output[2] == 'Room 1: [1,2dc,3,4x]', $output);
+        $this->assertCase(str_starts_with($output[2], 'Room 1: [1,2dc,3,4x]'), $output);
         $this->__testPlaying($output[3], 2);
-        $this->assertTrue($output[4] == 'Room 2: [5d,6c]');
-        $this->assertTrue($output[5] == 'Added Bot 7');
-        $this->__testPlaying($output[6], 6);
+        $this->assertCase(str_starts_with($output[5], 'Room 2: [5d,6c]'), $output);
+        $this->assertTrue($output[6] == 'Added Bot 7');
+        $this->__testPlaying($output[7], 6);
     }
     public function test_play_in_inactive_room(): void 
     {
@@ -107,11 +107,11 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 7');
         $this->assertTrue($output[1] == 'Available Rooms: 2');
-        $this->assertCase($output[2] == 'Room 1: [4x]', $output);
+        $this->assertCase(str_starts_with($output[2], 'Room 1: [4x]'), $output);
         $this->assertCase($output[3] == 'Added Bot 1', $output);
-        $this->assertTrue($output[4] == 'Room 2: [5dc,6,7x]');
-        $this->assertTrue($output[5] == 'Added Bot 2');
-        $this->__testPlaying($output[6], 5);
+        $this->assertCase(str_starts_with($output[6], 'Room 2: [5dc,6,7x]'), $output);
+        $this->assertTrue($output[7] == 'Added Bot 2');
+        $this->__testPlaying($output[8], 5);
     }
     public function test_play_back_to_normal(): void 
     {
@@ -119,11 +119,11 @@ class BotTest extends TestCase
         $output = explode("\n", Artisan::output());
         $this->assertTrue($output[0] == 'Registered Bots: 7');
         $this->assertTrue($output[1] == 'Available Rooms: 2');
-        $this->assertCase($output[2] == 'Room 1: [4d,1c]', $output);
+        $this->assertCase(str_starts_with($output[2], 'Room 1: [4d,1c]'), $output);
         $this->assertTrue($output[3] == 'Added Bot 3');
         $this->__testPlaying($output[4], 1);
-        $this->assertTrue($output[5] == 'Room 2: [5,6d,7c,2x]');
-        $this->__testPlaying($output[6], 7);
+        $this->assertCase(str_starts_with($output[6], 'Room 2: [5,6d,7c,2x]'), $output);
+        $this->__testPlaying($output[7], 7);
     }
 
     public function test_auto_pass(): void

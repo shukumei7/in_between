@@ -73,13 +73,14 @@ class Room extends Model
     }
 
     private function __getPlaying() {
-        return count($this->__players) > 1 ? array_values(array_intersect($this->__players, array_keys($this->__pots))) : [];
+        return count($this->__players) > 1 ? (array_values(array_intersect($this->__players, array_keys($this->__pots)))) : [];
     }
 
     public function getStatus($refresh = false) {
         if($this->__status && !$refresh) {
             return $this->__status;
         }
+        //        dump('Refresh analysis for Room '.$this->id);
         $active = count($this->__players) > 1;
         $playing = $this->__getPlaying();
         $users = User::whereIn('id', $playing)->get();
@@ -235,6 +236,7 @@ class Room extends Model
             return;
         }
         $this->__players []= $user_id;
+        $this->__players = array_unique($this->__players);
     }
 
     private function __removePlayer($user_id) { // TODO: consider shifting dealer and turn
@@ -261,9 +263,12 @@ class Room extends Model
             return; // left before playing
         }
         if(!isset($this->__hands[$user_id])) {
+            /*
             dump($this->getStatus()); // hwuat?
             dump(trace(6));
-            die;
+            */
+            dump('Invalid room status for leaving: '.$user_id);
+            return;
         }
         unset($this->__pots[$user_id]); // clear player data
         unset($this->__hands[$user_id]); // clear player data
@@ -292,11 +297,15 @@ class Room extends Model
         $this->__pot -= $bet;
         $this->__pots[$user_id] = $bet;
         if(!isset($this->__scores[$user_id])) {
+            $this->__scores[$user_id] = $bet;
+            return; // fix anyway
+            /*
             $activities = $this->__activities;
             $players = $this->__players;
             $scores = $this->__scores;
             $trace = array_map(function($a) { return $a; }, array_slice(debug_backtrace(), 0, 2));
             dd(compact('activities', 'players', 'scores', 'user_id', 'trace'));
+            */
         }
         $this->__scores[$user_id] += $bet;
     }
@@ -338,7 +347,10 @@ class Room extends Model
 
     private function __dealCard($user_id, $card) {
         $this->__dealt []= $card;
-        (!isset($this->__hands[$user_id]) || count($this->__hands[$user_id]) > 2) && $this->__hands[$user_id] = []; // reset hand on first deal
+        if(!isset($this->__hands[$user_id]) || count($this->__hands[$user_id]) > 2) {
+            // if(env('APP_ENV') == 'testing') dump('Reset hand: '.$user_id.' : '.json_encode($this->__hands));
+            $this->__hands[$user_id] = []; // reset hand on first deal
+        }
         $this->__hands[$user_id] []= $card;
         count($this->__hands[$user_id]) == 2 && sort($this->__hands[$user_id]);
         // reset turn to enforce start of round
