@@ -83,7 +83,7 @@ class User extends Authenticatable
         if(empty($this->id)) {
             return false;
         }
-        if(empty($latest_leave = $this->actions()->select('id')->whereIn('action', ['leave', 'kick'])->orderBy('time', 'desc')->first())) {
+        if(empty($latest_leave = $this->actions()->select('id')->whereIn('action', ['leave', 'kick'])->orderBy('id', 'desc')->first())) {
             return $this->__room_id = !empty($latest_join = $this->actions()->select('room_id')->where('action', 'join')->first())? $latest_join->room_id : 0;
         }
         return $this->__room_id = !empty($latest_join = $this->actions()->select('room_id')->where('action', 'join')->where('id', '>', $latest_leave->id)->first())? $latest_join->room_id : 0;

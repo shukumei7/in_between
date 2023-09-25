@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
 use App\Models\Variable;
+use App\Models\Snapshot;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -20,7 +21,9 @@ abstract class TestCase extends BaseTestCase
         Room::truncate();
         Action::truncate();
         Variable::truncate();
+        Snapshot::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        dump('Cleared Test Data');
     }
 
     protected function _checkResponseMessage($response, $message, $code = 200) {

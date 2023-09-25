@@ -4,15 +4,19 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
 use App\Models\User;
 use App\Models\Action;
+use App\Models\Snapshot;
 
 class Room extends Model
 {
     use HasFactory;
+
+    public static $snapshot_threshold = SNAPSHOT_THRESHOLD;
 
     protected $fillable = [
         'user_id',
@@ -32,6 +36,11 @@ class Room extends Model
         return $this->hasMany(Action::class);
     }
 
+    public function snapshot(): HasOne 
+    {
+        return $this->hasOne(Snapshot::class);
+    }
+
     private $__status = [];
     private $__dealt = [];
     private $__discards = [];
@@ -45,6 +54,7 @@ class Room extends Model
     private $__previous_time = 0;
     private $__activities = [];
     private $__scores = [];
+    private $__snapshot = null;
 
     public function analyze($refresh = false) {
         if($this->__status && !$refresh) {
@@ -86,8 +96,9 @@ class Room extends Model
         $users = User::whereIn('id', $playing)->get();
         $names = User::whereIn('id', Action::select(DB::raw('DISTINCT user_id as user_id'))->whereNotNull('user_id')->pluck('user_id')->toArray())->pluck('name', 'id')->toArray();
         $hands = array_map(function($a) { return count($a); }, $this->__hands);
+        $activities = array_map(function($event) use ($names) { if($event['user_id']) $event['name'] = $names[$event['user_id']]; return $event; }, array_merge($this->__snapshot ? [Action::find($this->__snapshot->action_id)->toArray()] : [], $this->__activities));
         $this->__status = [
-            'activities'    => array_map(function($event) use ($names) { if($event['user_id']) $event['name'] = $names[$event['user_id']]; return $event; }, $this->__activities),
+            'activities'    => $activities,
             'room_id'       => $this->id,
             'room_name'     => $this->name,
             'deck'          => 52 - count($this->__dealt),
@@ -108,13 +119,16 @@ class Room extends Model
             $this->__status['dealer_index'] = $this->__dealer;
             $this->__status['current_index'] = $this->__turn;
             $this->__status['pots'] = array_keys($this->__pots);
+            $this->__status['snapshot'] = $this->__snapshot ? $this->__snapshot->toArray() : [];
             return $this->__status;
         }
         return $this->__status;
     }
 
     public function getHand($user_id) {
-        return empty($this->__hands[$user_id]) ? [] : $this->__hands[$user_id];
+        $hand = empty($this->__hands[$user_id]) ? [] : $this->__hands[$user_id];
+        sort($hand);
+        return $hand;
     }
 
     public function getRemainingHands() {
@@ -131,24 +145,78 @@ class Room extends Model
         return $card;
     }
 
-    private function __analyzeStatus() {
-        if(empty($this->id) || empty($actions = $this->actions()->orderBy('id', 'asc')->get()->toArray())) {
+    private function __saveSnapshot() {
+        $condition = ['room_id' => $this->id];
+        $snapshot = Snapshot::firstOrNew($condition, $condition);
+        if(empty($this->__activities)) {
+            $this->__analyzeStatus();
+        }
+        $last = end($this->__activities);
+        $snapshot->action_id = $last['id'];
+        $count = count($ints = ['pot', 'dealer', 'turn']);
+        for($x = 0; $x < $count; $x++) {
+            $int = $ints[$x];
+            $__int = '__'.$int;
+            $snapshot->$int = $this->$__int;
+        }
+        $count = count($arrays = ['dealt', 'discards', 'players', 'hands', 'pots', 'scores', 'previous']);
+        for($x = 0; $x < $count; $x++) {
+            $array = $arrays[$x];
+            $__array = '__'.$array;
+            $snapshot->$array = json_encode($this->$__array);
+        }
+        env('APP_ENV') == 'testing' && dump('Save Snapshot for Room '.$this->id);
+        $snapshot->save();
+        return $this->__snapshot = $snapshot;
+    }
+
+    private function __loadSnapshot() {
+        if(empty($snapshot = $this->snapshot()->first())) {
             return false;
         }
+        $this->__snapshot = $snapshot;
+        $count = count($ints = ['pot', 'dealer', 'current']);
+        for($x = 0; $x < $count; $x++) {
+            $int = $ints[$x];
+            $__int = '__'.$int;
+            $this->$__int = $snapshot->$int;
+        }
+        $count = count($arrays = ['dealt', 'discards', 'players', 'hands', 'pots', 'scores', 'previous']);
+        for($x = 0; $x < $count; $x++) {
+            $array = $arrays[$x];
+            $__array = '__'.$array;
+            $this->$__array = json_decode($snapshot->$array, true);
+        }
+        return true;
+    }
+
+    private function __getActions($fresh = false) {
+        if($fresh || !$this->__loadSnapshot()) {
+            return $this->actions()->orderBy('id', 'asc')->get()->toArray();
+        }
+        $snapshot = $this->__snapshot;
+        return $this->actions()->where('id', '>', $snapshot->action_id)->orderBy('id', 'asc')->get()->toArray();
+    }
+
+    private function __analyzeStatus() {
+        $start = microtime(true);
         $this->__resetStatus();
-        $users = [];
+        if(empty($this->id) || empty($actions = $this->__getActions())) {
+            // dump('No actions found for Room '.$this->id);
+            return !empty($this->__snapshot);
+        }
         foreach($actions as $event) {
             $this->__analyzeAction($event);
             $this->__formatEvent($event);
         }
-        /*
-        if(count($this->__getPlaying()) > 1 && empty($this->__hands[$this->__players[$this->__turn]])) {
-            $this->__resetRoom();
+        $loadTime = microtime(true) - $start;
+        // if(env('APP_ENV') == 'testing') dump('Load Time: '.number_format($loadTime, 3));
+        if($loadTime > self::$snapshot_threshold) {
+            $this->__saveSnapshot(); // take a snapshot if load time goes beyond threshold
         }
-        */
         return true;
     }
-
+/*
     private function __resetRoom() {
         // error, current player has no hands, reset game
         $new_actions= [];
@@ -172,7 +240,7 @@ class Room extends Model
         }
         return true;
     }
-
+*/
     private function __formatEvent($event) {
         return $this->__activities []= array_intersect_key($event, [
             'id'           => null,
@@ -190,7 +258,8 @@ class Room extends Model
     }
 
     private function __resetDeck() {
-        $this->__discards = $this->__dealt = $this->__hands = [];
+        $this->__discards = $this->__dealt = [];
+        $this->__hands = array_fill_keys($this->__players, []);
     }
 
     private function __analyzeAction($action) {
@@ -231,6 +300,7 @@ class Room extends Model
 
     private function __addPlayer($user_id) { // TODO: improve logic
         $this->__scores[$user_id] = 0;
+        $this->__hands[$user_id] = [];
         if(count($this->__players) > 1 && $this->__dealer > 0 && $this->__dealer < count($playing = $this->__getPlaying()) - 1) {
             array_splice($this->__players, $this->__dealer, 0, $user_id);
             return;
@@ -347,12 +417,7 @@ class Room extends Model
 
     private function __dealCard($user_id, $card) {
         $this->__dealt []= $card;
-        if(!isset($this->__hands[$user_id]) || count($this->__hands[$user_id]) > 2) {
-            // if(env('APP_ENV') == 'testing') dump('Reset hand: '.$user_id.' : '.json_encode($this->__hands));
-            $this->__hands[$user_id] = []; // reset hand on first deal
-        }
         $this->__hands[$user_id] []= $card;
-        count($this->__hands[$user_id]) == 2 && sort($this->__hands[$user_id]);
         // reset turn to enforce start of round
         $this->__turn = $this->__dealer + 1;
         $this->__checkTurn();
@@ -363,21 +428,26 @@ class Room extends Model
         $this->__checkTurn();
     }
 
+    private function __getCurrentHand($user_id) {
+        if(!isset($this->__hands[$user_id])) {
+            return [];
+        }
+        return array_slice($this->__hands[$user_id], -2);
+    }
+
     private function __play($user_id, $bet, $card) {
         $this->__pot -= $bet;
         $this->__scores[$user_id] += $bet;
         $this->__dealt []= $card;
         $this->__discards []= $card;
-        if(empty($this->__hands[$user_id])) {
+        if(empty($hand = $this->__getCurrentHand($user_id))) {
             // error and shouldn't happen
             $this->__nextPlayer();
             return;
         }
-        $hand = $this->__hands[$user_id];
-        $this->__discards []= min($hand);
-        $this->__discards []= max($hand);
-        //$this->__hands[$user_id] []= $card; // keep hand for self reference
-        $this->__hands[$user_id] = []; // empty hand
+        $this->__discards []= $hand[0];
+        $this->__discards []= $hand[1];
+        $this->__hands[$user_id] = [];
         $this->__nextPlayer();
     }
 }
