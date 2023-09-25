@@ -10,6 +10,7 @@ use App\Http\Controllers\GameController;
 use App\Models\User;
 use App\Models\Room;
 use App\Models\Action;
+use App\Models\Snapshot;
 
 class BotTest extends TestCase
 {
@@ -142,11 +143,27 @@ class BotTest extends TestCase
 
     public function test_continuous_play(): void
     {
-        for($x = 0; $x < 50; $x++) {
+        $limit = 50;
+        Room::$snapshot_threshold = 0.03;
+        for($x = 0; $x < $limit; $x++) {
             $this->artisan('bots:run')->assertExitCode(0);
             $this->__kickRandomBot();
             $this->__checkAllRooms();
+            if(empty($snapshot = Snapshot::first())) {
+                $limit++;
+            } else if($snapshot) {
+                break;
+            }
         }
+        dump($snapshot);
+    }
+
+    public function test_snapshot_integrity(): void
+    {
+        $snapshot = Snapshot::first();
+        $this->artisan('bots:run')->assertExitCode(0);
+        $status = Room::find($snapshot->room_id)->analyze();
+        dump(compact('snapshot', 'status'));
     }
 
     private function __checkAllRooms() {

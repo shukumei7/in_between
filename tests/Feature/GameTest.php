@@ -364,7 +364,7 @@ class GameTest extends TestCase
         $this->assertResponse($response, 'room_id', 0);
         $this->assertResponse($response, 'message', 'You left the room');
         $this->assertEquals(4, $user->id);
-        $this->assertEquals(0, $user->getRoomID(true));
+        $this->assertCase(0 == $user->getRoomID(true), $user->getRoomID());
         $response = $this->get('/api/games/1');
         $this->assertCase($response['dealer'] == 2, $response);
         $this->assertCase($response['current'] == 3, $response);
