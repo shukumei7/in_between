@@ -42,19 +42,27 @@ class AutoKick extends Command
         $this->info('Rooms without activity: '.count($rooms));
         $this->Game = new GameController;
         foreach($rooms as $room) {
+            $start = microtime(true);
             $this->__checkKick($room);
+            $this->info('Analysis time: '.number_format(microtime(true) - $start, 3).' seconds');
         }
     }
 
     private function __checkKick($room) {
         $status = $room->analyze();
+        $this->info('Room '.$room->id.': '.number_format(count($status['activities'])).' activities');
         if($status['current'] == 0 || count($status['players']) < 2 || count($status['playing']) < 2) {
             $this->info('Room '.$room->id.' is inactive');
             return; // room is inactive
         }
+        if($status['deck'] == 0) {
+            $this->Game->resetRoom($room);
+            $this->info('Room '.$room->id.' is restarted');
+            return; // restart invalid room
+        }
         // auto pass
         // Action::add('pass', $room->id, ['user_id' => $status['current']]);
-        $this->Game->passHand($status['current']);
+        $this->Game->passHand($status['current'], $status, 'timeout');
         $this->info('Auto-Pass User '.$status['current'].' on Room '.$room->id);
         $user = User::find($user_id = $status['current']);
         $actions = $user->actions()->select('action')->whereIn('action', ['timeout' , 'pass', 'play'])->orderBy('id', 'desc')->limit(PASS_KICK)->pluck('action');

@@ -103,13 +103,20 @@ class User extends Authenticatable
         if(!isset($this->__bot_schemes[$this->remember_token])) {
             $this->activateBot();
         }
-        if(empty($hand = $status['hand'])) {
+        if(empty($hand = $status['hand']) || count($hand) < 2) {
+            dump($hand);
+            dump('User invalid hand');
+            if(env('APP_ENV') == 'testing') {
+                dd($status);
+            }
             return [ 'action' => 'pass' ]; // pass on error
         }
         $min = min($hand);
         $max = max($hand);
         $win = $max - $min - (floor($max/10) - floor($min/10)) * 6; // get cards to draw inside
         if(empty($deck = $status['deck'])) {
+            dump($deck);
+            dump('Invalid room deck');
             return [ 'action' => 'leave' ]; // leave dead room
         }
         $discards = $status['discards'];

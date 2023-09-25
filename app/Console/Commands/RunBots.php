@@ -44,7 +44,9 @@ class RunBots extends Command
         $this->Game = new GameController;
         $acted = false;
         foreach($rooms as $room) {
+            $start = microtime(true);
             $acted = $this->__analyzeRoom($room) || $acted;
+            $this->info('Analysis time: '.number_format(microtime(true) - $start, 3).' seconds');
         }
         if(!$acted && count($this->__bots) < MAX_BOTS) {
             $this->__startNewRoom();
@@ -53,47 +55,64 @@ class RunBots extends Command
 
     private function __analyzeRoom($room) {
         $this->Game->clearData();
+        $start = microtime(true);
         $status = $room->analyze();
         $acted = false;
         $count = count($status['players']);
         $this->info('Room '.$room->id.': ['.implode(',', array_map(function($a) use ($status) {
             return $a.(!in_array($a, $status['playing']) ? 'x' : (($status['dealer'] == $a ? 'd' : '').($status['current'] == $a? 'c' : '')));
-        }, array_keys($status['players']))).']');
+        }, array_keys($status['players']))).'] '.number_format(count($status['activities'])).' : '.number_format(microtime(true) - $start, 3).' seconds');
         if($count < MAX_ROOM_BOTS) {
             $this->__addBot($room);
             $acted = true;
         } 
-        if(!empty($user_id = $status['current']) && ($bot = $this->__getBot($user_id)) && !empty($move = $bot->decideMove($status + ['hand' => $room->getHand($bot->id)]))) {
+        if(!empty($user_id = $status['current']) && ($bot = $this->__getBot($user_id)) && !empty($move = $bot->decideMove($status += ['hand' => $room->getHand($bot->id)]))) {
             $this->__analyzeMove($bot, $move, $status);
-            $status = $this->Game->checkEndRound([], $status);
+            // $status = $this->Game->checkEndRound([], $status);
+        } else if(empty($user_id)) {
+            $this->info('No current user');
+            if(count($status['players']) > 1) {
+                // restart game
+                $this->Game->resetRoom($room);
+                $this->info('Reset room');
+            }
+        } else if(empty($bot)) {
+            // dump($user = User::find($user_id));
+            $this->info('No bot selected');
+            $user = User::find($user_id);
+            if($user->type == 'disabled') {
+                $this->__analyzeMove($user, ['action' => 'leave'], $status);
+            }
+        } else if(empty($move)) {
+            dump($status);
+            $this->info('Cannot decide move');
         }
         return $acted;
-        if(!$acted) {
-            dd($status);
-        }
     }
 
     private function __analyzeMove($bot, $move, $status) {
         $room = Room::find($status['room_id']);
         switch($move['action']) {
             case 'pass':
-                Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
+                // Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
+                $this->Game->passHand($bot->id, $status);
                 $this->info('Bot '.$bot->id.' passed');
                 return;
             case 'play':
-                $this->__playMove($bot, $move['bet'], $status);       
+                $bet = $move['bet'];
+                $this->Game->playHand($bot, $bet, $status);
+                $this->info('Bot '.$bot->id.' played and '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)));
+                $bet < 0 && $this->__kickBot($bot, $status);
+                $this->Game->checkEndRound([], $status);
                 return;
             case 'leave':
-                Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
+                // Action::add($move['action'], $room->id, ['user_id' => $bot->id] + $move);
+                $this->Game->leaveRoom($bot);
                 $this->info('Bot '.$bot->id.' left');
                 return;
         }
-    }
-
-    private function __playMove($bot, $bet, $status) {
-        $this->Game->playHand($bot, $bet);
-        $this->info('Bot '.$bot->id.' played and '.($bet > 0? 'won' : 'lost').' '.number_format(abs($bet)));
-        $bet < 0 && $this->__kickBot($bot, $status);
+        $this->info('Bot cannot take action');
+        dump($move);
     }
 
     private function __kickBot($bot, $status) {

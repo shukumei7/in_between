@@ -220,6 +220,12 @@ class GameController extends Controller
         $this->__room = $room;
     }
 
+    public function resetRoom($room) {
+        $this->__room = $room;
+        $this->__status = $room->analyze();
+        return $this->__startGame('Round is restarted');
+    }
+
     private function __startRound($room, $message  = null) {
         $status = $room->analyze(true);
         // var_dump($status['dealer']);
@@ -344,16 +350,17 @@ class GameController extends Controller
         return $this->checkEndRound($output, $status, true);
     }
 
-    public function playHand($user, &$bet) {
-        if(empty($room = $this->__room ?: Room::find($user->getRoomID()))) {
+    public function playHand($user, &$bet, $status = null) {
+        if(empty($room = $this->__room ?: Room::find($status ? $status['room_id'] : $user->getRoomID()))) {
             dump($message = 'No Room selected: User ID '.$user->id);
             return false; // throw new Exception($message);
         }
-        $status = $room->analyze();
-        if(empty($hand = $room->getHand($user_id = $user->id))) {
+        $status = $status ?: $room->analyze();
+        $user_id = $user->id;
+        if(empty($hand = isset($status['hand']) ? $status['hand'] : $room->getHand($user_id)) || count($hand) < 2) {
             dump(compact('status', 'hand'));
             dump($message = 'User has no hand: User ID '.$user_id);
-            return false; // throw new Exception($message);
+            return $this->passHand($user_id); // auto-pass / fix
         }
         $card = $room->dealCard();
         if(intval($card) < intval(min($hand)) || intval($card) > intval(max($hand))) {
@@ -366,11 +373,14 @@ class GameController extends Controller
         return $card;
     }
 
-    public function passHand($user_id) {
+    public function passHand($user_id, $status = null, $action = 'pass') {
         $this->__user = $user = User::find($user_id);
-        $this->__room = $room = Room::find($user->getRoomID());
-        $this->__status = $room->analyze();
-        return $this->__passHand('timeout');
+        if(empty($room_id = $user->getRoomID()) || empty($this->__room = $room = Room::find($room_id))) {
+            $this->__status = $status;
+            return $this->__getRoomStatus();
+        }
+        $this->__status = $status ?: $room->analyze();
+        return $this->__passHand($action);
     }
 
     private function __passHand($action = 'pass') {
@@ -428,6 +438,9 @@ class GameController extends Controller
             return response()->json(['message' => 'User is not in a room'], 302);
         }
         $status = $room->analyze(true);
+        if(empty($status['players'][$user->id])) {
+            return response()->json(['message' => 'User is not in a room'], 302);
+        }
         Action::add($kick ? 'kick' : 'leave', $room->id, ['user_id' => $user_id = $user->id]);
         $is_turn = $status['current'] == $user_id;
         $is_dealer = $status['dealer'] == $user_id;

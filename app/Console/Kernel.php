@@ -12,7 +12,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('bots:run')->everyFifteenSeconds()->onOneServer()->runInBackground()->timezone('UTC');
+        $schedule->command('bots:run')->everyTenSeconds()->onOneServer()->runInBackground()->timezone('UTC');
         $schedule->command('game:auto-kick')->everyFiveSeconds()->withoutOverlapping()->onOneServer()->runInBackground();
     }
 
