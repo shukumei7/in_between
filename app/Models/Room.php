@@ -16,6 +16,7 @@ class Room extends Model
 {
     use HasFactory;
 
+    public static $debug = false;
     public static $snapshot_threshold = SNAPSHOT_THRESHOLD;
 
     protected $fillable = [
@@ -56,12 +57,12 @@ class Room extends Model
     private $__scores = [];
     private $__snapshot = null;
 
-    public function analyze($refresh = false) {
-        if($this->__status && !$refresh) {
+    public function analyze($refresh = false, $rebuild = false) {
+        if($this->__status && !$refresh && !$rebuild) {
             return $this->__status;
         }
-        if($this->__analyzeStatus()) {
-            return $this->getStatus($refresh);
+        if($this->__analyzeStatus($rebuild)) {
+            return $this->getStatus($refresh || $rebuild);
         }
         return false;
     }
@@ -88,7 +89,7 @@ class Room extends Model
 
     public function getStatus($refresh = false) {
         if($this->__status && !$refresh) {
-            return $this->__status;
+           return $this->__status;
         }
         //        dump('Refresh analysis for Room '.$this->id);
         $active = count($this->__players) > 1;
@@ -175,7 +176,7 @@ class Room extends Model
             return false;
         }
         $this->__snapshot = $snapshot;
-        $count = count($ints = ['pot', 'dealer', 'current']);
+        $count = count($ints = ['pot', 'dealer', 'turn']);
         for($x = 0; $x < $count; $x++) {
             $int = $ints[$x];
             $__int = '__'.$int;
@@ -192,16 +193,18 @@ class Room extends Model
 
     private function __getActions($fresh = false) {
         if($fresh || !$this->__loadSnapshot()) {
+            if(self::$debug) dump('Get all actions for Room '.$this->id);
             return $this->actions()->orderBy('id', 'asc')->get()->toArray();
         }
         $snapshot = $this->__snapshot;
+        if(self::$debug) dump('Get recent actions for Room '.$this->id);
         return $this->actions()->where('id', '>', $snapshot->action_id)->orderBy('id', 'asc')->get()->toArray();
     }
 
-    private function __analyzeStatus() {
+    private function __analyzeStatus($rebuild = false) {
         $start = microtime(true);
         $this->__resetStatus();
-        if(empty($this->id) || empty($actions = $this->__getActions())) {
+        if(empty($this->id) || empty($actions = $this->__getActions($rebuild))) {
             // dump('No actions found for Room '.$this->id);
             return !empty($this->__snapshot);
         }

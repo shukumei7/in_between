@@ -155,15 +155,38 @@ class BotTest extends TestCase
                 break;
             }
         }
-        dump($snapshot);
+        // dump($snapshot);
     }
 
     public function test_snapshot_integrity(): void
     {
-        $snapshot = Snapshot::first();
+        Room::$debug = true;
+        $snapshot = Snapshot::first()->toArray();
+        // $this->artisan('bots:run')->assertExitCode(0);
+        $room = Room::find($snapshot['room_id']);
+        $snapped = $room->analyze();
+        $rebuilt = $room->analyze(true, true);
+        $comparison = [];
+        $fields = ['current_index', 'current', 'dealer_index', 'dealer', 'pot', 'hidden', 'deck'];
+        foreach($fields as $field) {
+            $comparison[$field]['snapped'] = $snapped[$field];
+            $comparison[$field]['rebuilt'] = $rebuilt[$field];
+            $this->assertCase($snapped[$field] == $rebuilt[$field], $comparison);
+        }
+        // $this->assertCase($rebuilt['current_index'] == $snapshot['turn'], compact('comparison', 'snapshot'));
+        // $this->assertCase($snapped['current_index'] == $snapshot['turn'], compact('comparison', 'snapshot'));
+        // $this->assertCase($rebuilt['current_index'] == $snapped['current_index'], compact('comparison', 'snapshot'));
+        // $this->assertCase($rebuilt['current'] == $snapped['current'], $comparison);
+        // $this->assertEquals($rebuilt['dealer'], $snapped['dealer']);
+        $this->assertEquals(json_encode($rebuilt['players']), json_encode($snapped['players']));
+        return;
         $this->artisan('bots:run')->assertExitCode(0);
-        $status = Room::find($snapshot->room_id)->analyze();
-        dump(compact('snapshot', 'status'));
+        $snapped = $room->analyze(true);
+        $rebuilt = $room->analyze(true, true);
+        $this->assertEquals($rebuilt['current'], $snapped['current']);
+        $this->assertEquals($rebuilt['dealer'], $snapped['dealer']);
+        $this->assertEquals(json_encode($rebuilt['players']), json_encode($snapped['players']));
+        // dump(compact('snapped', 'rebuilt'));
     }
 
     private function __checkAllRooms() {
